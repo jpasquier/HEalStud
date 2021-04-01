@@ -1,16 +1,18 @@
 wd <- "~/Projects/LaSource/Guzman - Healthy Students"
-date <- "2021-02-18"
+date <- "2021-04-01"
 load(file.path(wd, "/data/hs_20201119.rda"))
-z <- 0.5
-dom_list <- c("COVID19_4_Non", "COVID19_4_Oui")
+z <- 0
+dom_list <- c("Annee_1", "Annee_2", "Annee_Autre")
+s0 <- paste0("analyses_", gsub("-", "", date))
+output_dir <- path.expand(file.path(wd, "results", s0))
+if (!dir.exists(output_dir)) dir.create(output_dir)
 s1 <- sub("0\\.5", "05", z)
 for (dom in dom_list) {
   print(paste("Temps :", z, "/ Domaine :", dom))
   s2 <- gsub(" ", "_", iconv(dom, to="ASCII//TRANSLIT"))
   if (is.na(s2)) s2 <- "" else s2 <- paste0("_", s2)
-  output_file <- paste0("results/analyses_20210218_T", s1, s2, ".html")
-  output_file <- path.expand(file.path(wd, output_file))
-  rmd_file <- path.expand(file.path(wd, "R/analyses_20210218.Rmd"))
+  output_file <- file.path(output_dir, paste0(s0, "_T", s1, s2, ".html"))
+  rmd_file <- path.expand(file.path(wd, "R/analyses.Rmd"))
   tmp_file_1 <- paste0("/tmp/HS_tmp_", round(runif(1) * 10^10), ".Rmd")
   tmp_file_2 <- paste0("/tmp/HS_tmp_", round(runif(1) * 10^10), ".Rmd")
   if (z == 0.5 | !is.na(dom)) {

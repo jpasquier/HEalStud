@@ -78,6 +78,12 @@ if (!is.na(params$dom)) {
     hs <- hs[!is.na(hs$COVID19_4) & hs$COVID19_4 == 0, ]
   } else if (params$dom == "COVID19_4_Oui") {
     hs <- hs[!is.na(hs$COVID19_4) & hs$COVID19_4 == 1, ]
+  } else if (params$dom == "Annee_1") {
+    hs <- hs[!is.na(hs$Annee_etude) & hs$Annee_etude == 1, ]
+  } else if (params$dom == "Annee_2") {
+    hs <- hs[!is.na(hs$Annee_etude) & hs$Annee_etude == 2, ]
+  } else if (params$dom == "Annee_Autre") {
+    hs <- hs[!is.na(hs$Annee_etude) & hs$Annee_etude == 0, ]
   } else {
     hs <- hs[to_factor(hs$Domaine) == params$dom, ]
   }
