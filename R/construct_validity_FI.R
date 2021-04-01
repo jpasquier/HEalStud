@@ -1,0 +1,76 @@
+library(labelled)
+library(xlsx)
+
+# ---------------------------- Working directory ---------------------------- #
+
+setwd("~/Projects/LaSource/Guzman - Healthy Students")
+
+# -------------------------------- Load data -------------------------------- #
+
+load("data/hs_20201119.rda")
+
+hs <- hs[hs$Temps == 0, ]
+
+# --------------------------- Construct validity ---------------------------- #
+
+# Variables convergentes ou divergentes :
+#
+# WHOQOL-BREF degré de satisfaction par rapport à sa vie
+# WHOQOL-BREF sens de la vie
+# WHOQOL-BREF capacité de concentration, degré d’acceptation de soi
+# WHOQOL-BREF degré de satisfaction de soi-même
+# WHOQOL-BREF fréquence de sentiments négatifs
+# Echelle de résilience Connor-Davidson (CD-RISC®)
+# Echelle multidimensionnelle de soutien social perçu (MSPSS)
+# Exercice d’une activité lucrative accessoire
+#
+# Variables discriminantes
+# Etat civil
+# Suivi des études
+# Sexe
+
+# Correlation coefficient
+X1 <- c("WHOQOL_1", paste0("WHOQOL_d", 1:4, "_raw_score"),
+        "CD_RISC_tot", "MSPSS_tot")
+N <- unique(sapply(X1, function(x) nrow(na.omit(hs[c(x, "HFI_tot")]))))
+R <- t(sapply(X1, function(x) {
+  tmp <- na.omit(hs[c(x, "HFI_tot", "SHFI_tot")])
+  c(FI = cor(tmp$HFI_tot, tmp[[x]]), SFI = cor(tmp$SHFI_tot, tmp[[x]]))
+}))
+R <- cbind(data.frame(rownames(R), R))
+rownames(R) <- NULL
+names(R)[1] <- paste0("Pearson (n=", N, ")")
+R <- list(correlation_coefficients = R)
+rm(X1, N)
+
+# Anova
+X2 <- c("Act_lucrative", "Etat_civil", "Annee_etude", "Sexe")
+R <- c(R, lapply(X2, function(x) {
+  tmp <- na.omit(hs[c(x, "HFI_tot", "SHFI_tot")])
+  tmp[[x]] <- to_factor(tmp[[x]])
+  Merge <- function(u, v) merge(u, v, by = x, sort = FALSE)
+  M <- Reduce(Merge, lapply(1:2, function(k) {
+    y <- c("HFI_tot", "SHFI_tot")[k]
+    Y <- c("FI", "SFI")[k]
+    fml <- as.formula(paste(y, "~", x))
+    M <- aggregate(fml, tmp, mean)
+    names(M)[2] <- Y
+    pv <- data.frame("p.value anova", anova(lm(fml, tmp))$`Pr(>F)`[1])
+    names(pv) <- c(x, Y)
+    rbind(M, pv)
+  }))
+  names(M)[1] <- paste0(names(M)[1], " (n=", nrow(tmp), ")")
+  M
+}))
+names(R)[-1] <- X2
+
+# ----------------------------- Export results ------------------------------ #
+
+a <- FALSE
+for (r in names(R)) {
+  write.xlsx(R[[r]], "results/construct_validity_FI_20210105.xlsx",
+             sheetName = r, row.names = FALSE, append = a)
+  a <- TRUE
+}
+rm(a, r)
+
