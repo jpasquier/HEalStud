@@ -72,7 +72,11 @@ temps <- params$temps
 load("~/Projects/LaSource/Guzman - Healthy Students/data/hs_20201119.rda")
 hs <- hs[hs$Temps == temps, ]
 if (!is.na(params$dom)) {
-  hs <- hs[to_factor(hs$Domaine) == params$dom, ]
+  if (params$dom == "Soins infirmiers") {
+    hs <- hs[to_factor(hs$Filiere) == params$dom, ]
+  } else {
+    hs <- hs[to_factor(hs$Domaine) == params$dom, ]
+  }
 }
 ```
 
@@ -480,6 +484,8 @@ ggplot(subdat, aes(x = GSES_tot, y = WHOQOL_d2_raw_score)) +
 
 ```
 
+### Sans ajustement
+
 La variable `GSES` modère la variable `PSS14`.
 
 ```{r lm_psy_pss14_gses}
@@ -505,7 +511,45 @@ expand.grid(
 
 ```
 
+### Avec ajustement
 
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_gses_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * GSES_tot + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+En considérant une interaction avec la variable sexe, on voit que la modération
+peut dépendre de cette dernière :
+
+```{r lm_psy_pss14_gses_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * GSES_tot * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  GSES_tot = seq(10, 40, 5),
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(GSES_tot = factor(GSES_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score, color = GSES_tot)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
+
+```
 
 <!-- BEGIN PSS10 -->
 <details><summary>PSS10</summary>
@@ -564,6 +608,8 @@ ggplot(subdat, aes(x = CD_RISC_tot, y = WHOQOL_d2_raw_score)) +
 
 ```
 
+### Sans ajustement
+
 La variable `CD_RISC` modère la variable `PSS14`.
 
 ```{r lm_psy_pss14_cdrisc}
@@ -587,6 +633,47 @@ expand.grid(
   ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
              color = CD_RISC_tot)) +
   geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_cdrisc_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * CD_RISC_tot + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+En considérant une interaction avec la variable sexe, on voit que la modération
+peut dépendre de cette dernière :
+
+```{r lm_psy_pss14_cdrisc_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * CD_RISC_tot * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  CD_RISC_tot = seq(0, 40, 5),
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(CD_RISC_tot = factor(CD_RISC_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = CD_RISC_tot)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
 
 ```
 
@@ -648,6 +735,8 @@ ggplot(subdat, aes(x = MAAS_tot, y = WHOQOL_d2_raw_score)) +
 
 ```
 
+### Sans ajustement
+
 La variable `MAAS` modère la variable `PSS14`.
 
 ```{r lm_psy_pss14_maas}
@@ -671,6 +760,47 @@ expand.grid(
   ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
              color = MAAS_tot)) +
   geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_maas_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MAAS_tot + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+En considérant une interaction avec la variable sexe, on voit que la modération
+peut dépendre de cette dernière :
+
+```{r lm_psy_pss14_maas_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MAAS_tot * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MAAS_tot = seq(20, 90, 10),
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MAAS_tot = factor(MAAS_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MAAS_tot)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
 
 ```
 
@@ -716,7 +846,7 @@ expand.grid(
 rm(m, subdat)
 ```
 
-## Effet modérateur de la variable MSPSS
+## Effet modérateur de la variable MSPSS (score global)
 
 On observe une association entre la variable `MSPSS` et la variable 
 `WHOQOL_d2_raw_score`
@@ -731,6 +861,8 @@ ggplot(subdat, aes(x = MSPSS_tot, y = WHOQOL_d2_raw_score)) +
   theme_classic()
 
 ```
+
+### Sans ajustement
 
 La variable `MSPSS` modère la variable `PSS14`.
 
@@ -758,6 +890,47 @@ expand.grid(
 
 ```
 
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_mspss_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_tot + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+En considérant une interaction avec la variable sexe, on voit que la modération
+peut dépendre de cette dernière :
+
+```{r lm_psy_pss14_mspss_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_tot * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_tot = 1:7,
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_tot = factor(MSPSS_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_tot)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
+
+```
+
 <!-- BEGIN PSS10 -->
 <details><summary>PSS10</summary>
 Les étudiants ayant eu le PSS10 n'ont pas eu le MSPSS.
@@ -768,14 +941,606 @@ Les étudiants ayant eu le PSS10 n'ont pas eu le MSPSS.
 rm(m, subdat)
 ```
 
+## Effet modérateur de la variable `MSPSS_signif_other`
+
+```{r fig_psy_mspss, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "MSPSS_signif_other")])
+ggplot(subdat, aes(x = MSPSS_signif_other, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+```{r lm_psy_pss14_mspss}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_signif_other, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_mspss, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_signif_other = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_signif_other = factor(MSPSS_signif_other)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_signif_other)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_mspss_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_signif_other + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r lm_psy_pss14_mspss_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_signif_other * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_signif_other = 1:7,
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_signif_other = factor(MSPSS_signif_other)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_signif_other)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `MSPSS_family`
+
+```{r fig_psy_mspss, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "MSPSS_family")])
+ggplot(subdat, aes(x = MSPSS_family, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+```{r lm_psy_pss14_mspss}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_family, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_mspss, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_family = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_family = factor(MSPSS_family)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_family)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_mspss_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_family + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r lm_psy_pss14_mspss_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_family * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_family = 1:7,
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_family = factor(MSPSS_family)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_family)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `MSPSS_friends`
+
+```{r fig_psy_mspss, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "MSPSS_friends")])
+ggplot(subdat, aes(x = MSPSS_friends, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+```{r lm_psy_pss14_mspss}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_friends, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_mspss, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_friends = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_friends = factor(MSPSS_friends)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_friends)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe (l'utilisation de la variable sexe exclut
+les répondants anglophones) :
+
+```{r lm_psy_pss14_mspss_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_friends + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r lm_psy_pss14_mspss_adjusted_2}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_friends * Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+expand.grid(
+  PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_friends = 1:7,
+  Age = median(m$model$Age),
+  Sexe = c("une femme", "un homme")
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_friends = factor(MSPSS_friends)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_friends)) +
+  geom_line() +
+  facet_wrap(~ Sexe) +
+  labs(caption = paste("Prediction pour l'âge médian :",
+                       median(m$model$Age), "ans")) +
+  theme(legend.position = "top") +
+  guides(color = guide_legend(nrow = 1))
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+<!-- BEGIN PTGI -->
+
+## Effet modérateur de la variable PTGI (score global)
+
+On observe pas d'association entre la variable `PTGI` et la variable 
+`WHOQOL_d2_raw_score`
+
+```{r fig_psy_ptgi, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "PTGI_tot")])
+ggplot(subdat, aes(x = PTGI_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+La variable `PTGI` ne modère pas la variable `PSS14`.
+
+```{r lm_psy_pss14_ptgi}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_tot, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_ptgi, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  PTGI_tot = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(PTGI_tot = factor(PTGI_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = PTGI_tot)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe :
+
+```{r lm_psy_pss14_ptgi_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_tot + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `PTGI_new_possibilities`
+
+On observe pas d'association entre la variable `PTGI_new_possibilities` et la
+variable `WHOQOL_d2_raw_score`
+
+```{r fig_psy_ptgi, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "PTGI_new_possibilities")])
+ggplot(subdat, aes(x = PTGI_new_possibilities, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+La variable `PTGI_new_possibilities` ne modère pas la variable `PSS14`.
+
+```{r lm_psy_pss14_ptgi}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_new_possibilities, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_ptgi, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  PTGI_new_possibilities = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(PTGI_new_possibilities = factor(PTGI_new_possibilities)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = PTGI_new_possibilities)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe :
+
+```{r lm_psy_pss14_ptgi_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_new_possibilities + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `PTGI_relating_to_others`
+
+On observe pas d'association entre la variable `PTGI_relating_to_others` et la
+variable `WHOQOL_d2_raw_score`
+
+```{r fig_psy_ptgi, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "PTGI_relating_to_others")])
+ggplot(subdat, aes(x = PTGI_relating_to_others, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+La variable `PTGI` ne modère pas la variable `PSS14`.
+
+```{r lm_psy_pss14_ptgi}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_relating_to_others, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_ptgi, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  PTGI_relating_to_others = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(PTGI_relating_to_others = factor(PTGI_relating_to_others)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = PTGI_relating_to_others)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe :
+
+```{r lm_psy_pss14_ptgi_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_relating_to_others + Sexe +
+          Age, mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `PTGI_personal_strength`
+
+On observe pas d'association entre la variable `PTGI_personal_strength` et la
+variable `WHOQOL_d2_raw_score`
+
+```{r fig_psy_ptgi, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "PTGI_personal_strength")])
+ggplot(subdat, aes(x = PTGI_personal_strength, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+La variable `PTGI` ne modère pas la variable `PSS14`.
+
+```{r lm_psy_pss14_ptgi}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_personal_strength, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_ptgi, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  PTGI_personal_strength = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(PTGI_personal_strength = factor(PTGI_personal_strength)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = PTGI_personal_strength)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe :
+
+```{r lm_psy_pss14_ptgi_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_personal_strength + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `PTGI_appreciation_of_life`
+
+On observe pas d'association entre la variable `PTGI_appreciation_of_life` et
+la variable `WHOQOL_d2_raw_score`
+
+```{r fig_psy_ptgi, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "PTGI_appreciation_of_life")])
+ggplot(subdat, aes(x = PTGI_appreciation_of_life, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+La variable `PTGI` ne modère pas la variable `PSS14`.
+
+```{r lm_psy_pss14_ptgi}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_appreciation_of_life, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_ptgi, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  PTGI_appreciation_of_life = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(PTGI_appreciation_of_life = factor(PTGI_appreciation_of_life)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = PTGI_appreciation_of_life)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe :
+
+```{r lm_psy_pss14_ptgi_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_appreciation_of_life + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable `PTGI_spiritual_change`
+
+On observe pas d'association entre la variable `PTGI_spiritual_change` et la
+variable `WHOQOL_d2_raw_score`
+
+```{r fig_psy_ptgi, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score",
+                       "PTGI_spiritual_change")])
+ggplot(subdat, aes(x = PTGI_spiritual_change, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+### Sans ajustement
+
+La variable `PTGI` ne modère pas la variable `PSS14`.
+
+```{r lm_psy_pss14_ptgi}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_spiritual_change, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss14_ptgi, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  PTGI_spiritual_change = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(PTGI_spiritual_change = factor(PTGI_spiritual_change)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = PTGI_spiritual_change)) +
+  geom_line()
+
+```
+
+### Avec ajustement
+
+Analyse ajustée pour l'âge et le sexe :
+
+```{r lm_psy_pss14_ptgi_adjusted}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * PTGI_spiritual_change + Sexe + Age,
+        mutate(hs, Sexe = to_factor(Sexe)))
+summary(m)
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+<!-- END PTGI -->
+
 ## Corrélation entre les variables modératrices
 
 Les variables modératrices sont corrélées entre elles et ont sensiblement toute
 le même effet sur la relation entre les variables `PSS14` et `WHOQOL_PSY`.
 
 ```{r fig_cor_moderators, out.width="100%"}
-subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "GSES_tot",
-                       "CD_RISC_tot", "MAAS_tot", "MSPSS_tot")])
+X <- c("PSS14_tot", "WHOQOL_d2_raw_score", "GSES_tot", "CD_RISC_tot",
+       "MAAS_tot", "MSPSS_tot")
+if (!all(is.na(hs$PTGI_tot))) {
+  X <- c(X, "PTGI_tot")
+}
+subdat <- na.omit(hs[X])
 fig <- ggpairs(subdat, progress = FALSE) +
   labs(caption = paste("Nombre d'observations :", nrow(subdat)))
 fig
@@ -815,15 +1580,133 @@ rm(f, fig, garbage, subdat)
 </details>
 <!-- END PSS10 -->
 
-<!-- ====================================================================== -->
+## Modèle multivariable (sans PTGI)
 
-## Modèle multivariable
+### Sans ajustement
 
-```{r multivariable_model}
+```{r multivariable_model_without_ptgi}
 X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot", "MSPSS_tot")
-if (temps == 0.5) X <- c(X, "PTGI_tot")
 fml <- paste("WHOQOL_d2_raw_score  ~",
              paste(paste("PSS14_tot *", X), collapse = " + "))
+fml <- as.formula(fml)
+complete_cases <- na.omit(hs[c("WHOQOL_d2_raw_score", "PSS14_tot", X)])
+m <- do.call("lm", list(formula = fml, data = quote(complete_cases)))
+summary(m)
+if (nrow(hs) > nrow(complete_cases)) {
+  print(paste(nrow(hs) - nrow(complete_cases),
+              "observation(s) deleted due to missingness"))
+}
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+```
+
+Sélection des variables (pour info) :
+
+```{r stepwise_model_without_ptgi}
+s <- step(m, trace = FALSE)
+summary(s)
+```
+
+```{r multivariable_model_table_without_ptgi}
+Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar", "stepwise"), function(x) {
+  if (x == "multivar") {
+    m0 <- m
+  } else if (x == "stepwise") {
+    m0 <- s
+  } else {
+    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS14_tot *", x))
+    m0 <- lm(fml, m$model)
+  }
+  beta <- coef(m0)
+  pv <- coef(summary(m0))[, "Pr(>|t|)"]
+  tbl <- cbind(data.frame(coef = names(beta), beta = beta),
+               confint(m0), pval =pv)
+  rownames(tbl) <- NULL
+  colnames(tbl)[-1] <-
+    paste0(colnames(tbl)[-1], " (", sub("_tot$", "", x), ")")
+  return(tbl)
+}))
+```
+
+```{r multivariable_model_export_table_without_ptgi, echo=FALSE}
+f <- "/tmp/multivariable_model.xlsx"
+write_xlsx(list(multivariable_model = reg_tbl), f)
+embed_file(f, text = "multivariable_model (xlsx)")
+f <- file.remove(f)
+rm(X, fml, m, reg_tbl, f)
+```
+
+### Avec ajustement
+
+```{r multivariable_model_without_ptgi}
+X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot", "MSPSS_tot", "Sexe", "Age")
+fml <- paste("WHOQOL_d2_raw_score  ~",
+             paste(paste("PSS14_tot *", X), collapse = " + "))
+fml <- as.formula(fml)
+complete_cases <- na.omit(hs[c("WHOQOL_d2_raw_score", "PSS14_tot", X)])
+m <- do.call("lm", list(formula = fml, data = quote(complete_cases)))
+summary(m)
+if (nrow(hs) > nrow(complete_cases)) {
+  print(paste(nrow(hs) - nrow(complete_cases),
+              "observation(s) deleted due to missingness"))
+}
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+```
+
+Sélection des variables (pour info) :
+
+```{r stepwise_model_without_ptgi}
+s <- step(m, trace = FALSE)
+summary(s)
+```
+
+```{r multivariable_model_table_without_ptgi}
+Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar", "stepwise"), function(x) {
+  if (x == "multivar") {
+    m0 <- m
+  } else if (x == "stepwise") {
+    m0 <- s
+  } else {
+    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS14_tot *", x))
+    m0 <- lm(fml, m$model)
+  }
+  beta <- coef(m0)
+  pv <- coef(summary(m0))[, "Pr(>|t|)"]
+  tbl <- cbind(data.frame(coef = names(beta), beta = beta),
+               confint(m0), pval =pv)
+  rownames(tbl) <- NULL
+  colnames(tbl)[-1] <-
+    paste0(colnames(tbl)[-1], " (", sub("_tot$", "", x), ")")
+  return(tbl)
+}))
+```
+
+```{r multivariable_model_export_table_without_ptgi, echo=FALSE}
+f <- "/tmp/multivariable_model.xlsx"
+write_xlsx(list(multivariable_model = reg_tbl), f)
+embed_file(f, text = "multivariable_model (xlsx)")
+f <- file.remove(f)
+rm(X, fml, m, reg_tbl, f)
+```
+
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r multivariable_model}
+X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot")
+fml <- paste("WHOQOL_d2_raw_score  ~",
+             paste(paste("PSS10_tot *", X), collapse = " + "))
 fml <- as.formula(fml)
 m <- do.call("lm", list(formula = fml, data = quote(hs)))
 summary(m)
@@ -837,11 +1720,86 @@ ggplot(m) +
   theme_classic()
 ```
 
+Sélection des variables (pour info) :
+
+```{r}
+s <- step(m, trace = FALSE)
+summary(s)
+```
+
 ```{r multivariable_model_table}
 Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
-reg_tbl <- Reduce(Merge, lapply(c(X, "multivar"), function(x) {
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar", "stepwise"), function(x) {
   if (x == "multivar") {
     m0 <- m
+  } else if (x == "stepwise") {
+    m0 <- s
+  } else {
+    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS10_tot *", x))
+    m0 <- lm(fml, m$model)
+  }
+  beta <- coef(m0)
+  pv <- coef(summary(m0))[, "Pr(>|t|)"]
+  tbl <- cbind(data.frame(coef = names(beta), beta = beta),
+               confint(m0), pval =pv)
+  rownames(tbl) <- NULL
+  colnames(tbl)[-1] <-
+    paste0(colnames(tbl)[-1], " (", sub("_tot$", "", x), ")")
+  return(tbl)
+}))
+```
+
+```{r multivariable_model_export_table, echo=FALSE}
+f <- "/tmp/multivariable_model_pss10.xlsx"
+write_xlsx(list(multivariable_model = reg_tbl), f)
+embed_file(f, text = "multivariable_model_pss10 (xlsx)")
+f <- file.remove(f)
+rm(X, fml, m, reg_tbl, f)
+```
+
+</details>
+<!-- END PSS10 -->
+
+<!-- BEGIN PTGI -->
+
+## Modèle multivariable (avec PTGI)
+
+### Sans ajustement
+
+```{r multivariable_model_with_ptgi}
+X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot", "MSPSS_tot", "PTGI_tot")
+fml <- paste("WHOQOL_d2_raw_score  ~",
+             paste(paste("PSS14_tot *", X), collapse = " + "))
+fml <- as.formula(fml)
+complete_cases <- na.omit(hs[c("WHOQOL_d2_raw_score", "PSS14_tot", X)])
+m <- do.call("lm", list(formula = fml, data = quote(complete_cases)))
+summary(m)
+if (nrow(hs) > nrow(complete_cases)) {
+  print(paste(nrow(hs) - nrow(complete_cases),
+              "observation(s) deleted due to missingness"))
+}
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+```
+
+Sélection des variables (pour info) :
+
+```{r stepwise_model_with_ptgi}
+s <- step(m, trace = FALSE)
+summary(s)
+```
+
+```{r multivariable_model_table_with_ptgi}
+Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar", "stepwise"), function(x) {
+  if (x == "multivar") {
+    m0 <- m
+  } else if (x == "stepwise") {
+    m0 <- s
   } else {
     fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS14_tot *", x))
     m0 <- lm(fml, m$model)
@@ -865,19 +1823,21 @@ f <- file.remove(f)
 rm(X, fml, m, reg_tbl, f)
 ```
 
-<!-- BEGIN PSS10 -->
-<details><summary>PSS10</summary>
+### Avec ajustement
 
-```{r multivariable_model}
-X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot")
-if (temps == 0.5) X <- c(X, "PTGI_tot")
+```{r multivariable_model_with_ptgi}
+X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot", "MSPSS_tot", "PTGI_tot",
+       "Sexe", "Age")
 fml <- paste("WHOQOL_d2_raw_score  ~",
-             paste(paste("PSS10_tot *", X), collapse = " + "))
+             paste(paste("PSS14_tot *", X), collapse = " + "))
 fml <- as.formula(fml)
-m <- do.call("lm", list(formula = fml, data = quote(hs)))
+complete_cases <- na.omit(hs[c("WHOQOL_d2_raw_score", "PSS14_tot", X)])
+m <- do.call("lm", list(formula = fml, data = quote(complete_cases)))
 summary(m)
-#s <- step(m, direction = "both", trace = FALSE)
-#summary(s)
+if (nrow(hs) > nrow(complete_cases)) {
+  print(paste(nrow(hs) - nrow(complete_cases),
+              "observation(s) deleted due to missingness"))
+}
 ggplot(m) +
   stat_qq(aes(sample = .stdresid)) +
   geom_abline() +
@@ -886,13 +1846,22 @@ ggplot(m) +
   theme_classic()
 ```
 
-```{r multivariable_model_table}
+Sélection des variables (pour info) :
+
+```{r stepwise_model_with_ptgi}
+s <- step(m, trace = FALSE)
+summary(s)
+```
+
+```{r multivariable_model_table_with_ptgi}
 Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
-reg_tbl <- Reduce(Merge, lapply(c(X, "multivar"), function(x) {
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar", "stepwise"), function(x) {
   if (x == "multivar") {
     m0 <- m
+  } else if (x == "stepwise") {
+    m0 <- s
   } else {
-    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS10_tot *", x))
+    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS14_tot *", x))
     m0 <- lm(fml, m$model)
   }
   beta <- coef(m0)
@@ -914,8 +1883,34 @@ f <- file.remove(f)
 rm(X, fml, m, reg_tbl, f)
 ```
 
-</details>
-<!-- END PSS10 -->
+<!-- END PTGI -->
+
+<!-- BEGIN PTGI -->
+
+## Scores `PTGI` en fonction des Questions `COVID19_3` ou `COVID19_4`
+
+```{r}
+
+do.call(rbind, lapply(grep("^PTGI", names(hs), value = TRUE), function(y) {
+  do.call(rbind, lapply(paste0("COVID19_", 3:4), function(x) {
+    fml <- as.formula(paste(y, "~", x))
+    N <- length
+    fcts <- c("N", "mean", "sd", "median", "IQR", "min", "max")
+    Merge <- function(u, v) merge(u, v, by = "Exposition value")
+    r <- Reduce(Merge, lapply(fcts, function(fct) {
+      r <- aggregate(fml, hs, get(fct))
+      names(r) <- c("Exposition value", fct)
+      return(r)
+    }))
+    pv <- t.test(fml, hs)$p.value
+    cbind(Outcome = y, `Exposition variable` = x, r, ttest_pval = c(pv, NA))
+  }))
+})) %>%
+  kable(digits = 2)
+
+```
+
+<!-- END PTGI -->
 
 ## Flourish index
 
