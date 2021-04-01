@@ -74,6 +74,10 @@ hs <- hs[hs$Temps == temps, ]
 if (!is.na(params$dom)) {
   if (params$dom == "Soins infirmiers") {
     hs <- hs[to_factor(hs$Filiere) == params$dom, ]
+  } else if (params$dom == "COVID19_4_Non") {
+    hs <- hs[!is.na(hs$COVID19_4) & hs$COVID19_4 == 0, ]
+  } else if (params$dom == "COVID19_4_Oui") {
+    hs <- hs[!is.na(hs$COVID19_4) & hs$COVID19_4 == 1, ]
   } else {
     hs <- hs[to_factor(hs$Domaine) == params$dom, ]
   }
@@ -1892,7 +1896,12 @@ rm(X, fml, m, reg_tbl, f)
 ```{r}
 
 do.call(rbind, lapply(grep("^PTGI", names(hs), value = TRUE), function(y) {
-  do.call(rbind, lapply(paste0("COVID19_", 3:4), function(x) {
+  if (length(unique(hs$COVID19_4)) == 1) {
+    X <- "COVID19_3"
+  } else {
+    X <- paste0("COVID19_", 3:4)
+  }
+  do.call(rbind, lapply(X, function(x) {
     fml <- as.formula(paste(y, "~", x))
     N <- length
     fcts <- c("N", "mean", "sd", "median", "IQR", "min", "max")
@@ -1902,7 +1911,11 @@ do.call(rbind, lapply(grep("^PTGI", names(hs), value = TRUE), function(y) {
       names(r) <- c("Exposition value", fct)
       return(r)
     }))
-    pv <- t.test(fml, hs)$p.value
+    if (length(unique(na.omit(hs[[x]]))) <= 1) {
+      pv <- NA
+    } else {
+      pv <- t.test(fml, hs)$p.value
+    }
     cbind(Outcome = y, `Exposition variable` = x, r, ttest_pval = c(pv, NA))
   }))
 })) %>%
