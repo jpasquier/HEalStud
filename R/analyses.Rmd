@@ -1,5 +1,6 @@
 ---
 title: "Etude HealStud - Analyse des données à T`r params$temps`"
+subtitle: "`r if (!is.null(params$dom)) paste('Domaine :', params$dom)`"
 author: "Jérôme Pasquier"
 date: "`r params$date`"
 output:
@@ -9,7 +10,8 @@ output:
     toc_float: false
     code_folding: hide
 params:
-    temps: 0
+    temps: NA
+    dom: NA
     date: ""
 ---
 
@@ -45,6 +47,7 @@ library(knitr)
 library(dplyr)
 library(labelled)
 library(pander)
+library(binom)
 library(psych)
 library(lavaan)
 library(ggplot2)
@@ -66,14 +69,19 @@ options(knitr.kable.NA = "")
 # -------------------------------- Load data -------------------------------- #
 
 temps <- params$temps
-load("../data/hs_20201119.rda")
+load("~/Projects/LaSource/Guzman - Healthy Students/data/hs_20201119.rda")
 hs <- hs[hs$Temps == temps, ]
+if (!is.na(params$dom)) {
+  hs <- hs[to_factor(hs$Domaine) == params$dom, ]
+}
 ```
 
 <!-- ======================= Descriptive statistics ======================= -->
 
 
 ## Statistiques descriptives
+
+Nombre d'observations : `r nrow(hs)`.
 
 Une description de la distribution de chaque variable de la base de données se
 trouve dans les fichiers ci-dessous.
@@ -87,7 +95,7 @@ X <- c("WHOQOL_(1|2|d[1-4]_.+)", "PSS14_tot", "PSS10_tot", "GSES_tot",
        "Act_lucrative", "Annee_etude", "Bon", "Domaine", "ENSA", "Etat_civil",
        "Filiere", "Follow_up", "HESSOGeneve", "Recrutement", "Sexe")
 if (temps == 0.5) {
-  X <- X[X != "PSS10_tot"]
+  X <- X[!(X %in% c("PSS10_tot", "Bon"))]
   X <- c(X, "HEalStud_1", "COVID19_[1-4]", "PTGI_.+")
 }
 X <- paste0("^", X, "$")
@@ -98,8 +106,13 @@ tbl_descr <- do.call(rbind, lapply(X, function(x) {
   type <- paste(class(hs[[x]]), collapse = " ")
   z <- na.omit(hs[[x]])
   if (any(class(hs[[x]]) %in% c("factor", "logical"))) {
+    if (any(class(z) == "factor")) z <- droplevels(z)
     tab <- table(z)
-    tab <- cbind(tab, prop.table(tab))
+    ci <- t(sapply(tab, function(x) {
+      y <- binom.confint(x = x, n = sum(tab), method = "wilson")
+      unlist(y[, c("lower", "upper")])
+    }))
+    tab <- cbind(tab, prop.table(tab), ci)
     tab <- data.frame(rownames(tab), tab)
     if (any(nchar(as.character(z)) > 15)) {
       rotate <- TRUE
@@ -121,10 +134,17 @@ tbl_descr <- do.call(rbind, lapply(X, function(x) {
     }
     fig_descr[[x]] <<- fig
   } else if (class(hs[[x]]) %in% c("numeric", "integer")) {
+    if (length(z) > 1) {
+      hci <- qt(0.975, length(z) - 1) * sd(z) / sqrt(length(z))
+    } else {
+      hci <- NA
+    }
     tab <- data.frame(
       c("Mean/SD", "Median/IQR", "Min/Max"),
       c(mean(z), median(z), min(z)),
-      c(sd(z), IQR(z), max(z))
+      c(sd(z), IQR(z), max(z)),
+      c(mean(z) - hci, NA, NA),
+      c(mean(z) + hci, NA, NA)
     )
     brx <- pretty(range(z), n = nclass.Sturges(z), min.n = 1)
     fig <- ggplot(hs[!is.na(hs[[x]]), ], aes_string(x = x)) +
@@ -140,7 +160,7 @@ tbl_descr <- do.call(rbind, lapply(X, function(x) {
   }
   tab <- cbind(x, type, sum(is.na(hs[[x]])), tab)
   names(tab) <- 
-    c("Variable", "Type", "Nmiss", "Value", "(N)", "(Prop)")
+    c("Variable", "Type", "Nmiss", "Value", "(N)", "(Prop)", "2.5 %", "97.5 %")
   rownames(tab) <- NULL
   return(tab)
 }))
@@ -264,6 +284,7 @@ Spearman est égal à `r s_char`.
 Un analyse de régression linéaire fait également ressortir l'association entre
 les deux variables.
 
+<details><summary>Analyse de régression</summary>
 ```{r cor_pss14_whoqolpsy_3, out.width="100%"}
 
 # ----------- Linear resgression WHOQOL_d2_raw_score ~ PSS14_tot ------------ #
@@ -285,10 +306,161 @@ ggplot(m) +
   theme_classic()
 
 ```
+</details>
+
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r cor_pss10_whoqolpsy_1}
+
+# -------------- Correlation betwwen PSS14 and WHOQOL-BREF-PSY -------------- #
+
+# Select complete cases
+subdat <- na.omit(hs[c("WHOQOL_d2_raw_score", "PSS10_tot")])
+# Number of complete cases
+n <- nrow(subdat)
+# Pearson coefficient
+p <- cor.test(subdat$WHOQOL_d2_raw_score, subdat$PSS10_tot)
+# Spearman coefficient
+s <- cor.test(subdat$WHOQOL_d2_raw_score, subdat$PSS10_tot,
+              method = "spearman", exact = FALSE)
+# Confidence interval of the Spearman coefficient
+sci <- tanh(atanh(s$estimate) + c(-1, 1) * qnorm(0.975) / sqrt(n - 3))
+
+```
+
+```{r cor_pss10_whoqolpsy_2, echo=FALSE}
+
+p_char <- paste0(
+  signif(p$estimate, 3),
+  " (IC [",
+  paste(signif(p$conf.int, 3), collapse = ";"),
+  "], p",
+  ifelse(p$p.value < .001, "<.001", paste0("=", round(p$p.value, 3))),
+  ")"
+)
+s_char <- paste0(
+  signif(s$estimate, 3),
+  " (IC [",
+  paste(signif(sci, 3), collapse = ";"),
+  "], p",
+  ifelse(s$p.value < .001, "<.001", paste0("=", round(s$p.value, 3))),
+  ")"
+)
+
+```
+
+Il y a `r n` observations pour lesquelles les deux variables sont disponibles.
+Le coeficient de corrélation de Pearson est égal à `r p_char` et celui de
+Spearman est égal à `r s_char`.
+
+Un analyse de régression linéaire fait également ressortir l'association entre
+les deux variables.
+
+<details><summary>Analyse de régression</summary>
+```{r cor_pss10_whoqolpsy_3, out.width="100%"}
+
+# ----------- Linear resgression WHOQOL_d2_raw_score ~ PSS14_tot ------------ #
+
+m <- lm(WHOQOL_d2_raw_score ~ PSS10_tot, subdat)
+summary(m)
+
+ggplot(subdat, aes(x = PSS10_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+
+```
+</details>
+
+</details>
+<!-- END PSS10 -->
 
 ```{r cleaning, echo=FALSE}
 rm(m, n, p, p_char, s, s_char, sci, subdat)
 ```
+
+<!-- ======== Correlations between WHOQOL_PSY/PSS14 and moderators ======== -->
+
+## Corrélations entre le WHOQOL-PSY/PSS14 et les variables modératrices
+
+```{r tab_cor_moderators}
+Y <- c("PSS14_tot", "WHOQOL_d2_raw_score")
+X <- c("PSS14_tot", "GSES_tot", "CD_RISC_tot", "MAAS_tot", "MSPSS_tot")
+if (temps == 0.5) X <- c(X, "PTGI_tot")
+tab_cor <- do.call(rbind, lapply(Y, function(y) {
+  do.call(rbind, lapply(X, function(x) {
+    subdat <- na.omit(hs[c(x, y)])
+    n <- nrow(subdat)
+    w <- do.call(base::c, lapply(c("pearson", "spearman"), function(method) {
+      p <- cor.test(subdat[[x]], subdat[[y]], method = method, exact = FALSE)
+      if (method == "pearson") {
+        ci <- p$conf.int
+      } else {
+        ci <- tanh(atanh(p$estimate) + c(-1, 1) * qnorm(0.975) / sqrt(n - 3))
+      }
+      z <- c(p$estimate, ci, p$p.value)
+      names(z) <- paste(c("cor", "lwr", "upr", "pv"), method, sep = "_")
+      return(z)
+    }))
+    cbind(data.frame(var1 = y, var2 = x, n = n), t(w))
+  }))
+}))
+```
+
+```{r  tab_cor_moderators_export_table, echo=FALSE}
+f <- "/tmp/tab_cor.xlsx"
+write_xlsx(list(correlations = tab_cor), f)
+embed_file(f, text = "Tableau corrélations (xlsx)")
+f <- file.remove(f)
+rm(f, tab_cor, X, Y)
+```
+
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r tab_cor_moderators}
+Y <- c("PSS10_tot", "WHOQOL_d2_raw_score")
+X <- c("PSS10_tot", "GSES_tot", "CD_RISC_tot", "MAAS_tot")
+if (temps == 0.5) X <- c(X, "PTGI_tot")
+tab_cor <- do.call(rbind, lapply(Y, function(y) {
+  do.call(rbind, lapply(X, function(x) {
+    subdat <- na.omit(hs[c(x, y)])
+    n <- nrow(subdat)
+    w <- do.call(base::c, lapply(c("pearson", "spearman"), function(method) {
+      p <- cor.test(subdat[[x]], subdat[[y]], method = method, exact = FALSE)
+      if (method == "pearson") {
+        ci <- p$conf.int
+      } else {
+        ci <- tanh(atanh(p$estimate) + c(-1, 1) * qnorm(0.975) / sqrt(n - 3))
+      }
+      z <- c(p$estimate, ci, p$p.value)
+      names(z) <- paste(c("cor", "lwr", "upr", "pv"), method, sep = "_")
+      return(z)
+    }))
+    cbind(data.frame(var1 = y, var2 = x, n = n), t(w))
+  }))
+}))
+```
+
+```{r  tab_cor_moderators_export_table, echo=FALSE}
+f <- "/tmp/tab_cor.xlsx"
+write_xlsx(list(correlations = tab_cor), f)
+embed_file(f, text = "Tableau corrélations (xlsx)")
+f <- file.remove(f)
+rm(f, tab_cor, X, Y)
+```
+
+</details>
+<!-- END PSS10 -->
 
 <!-- =============== Moderator effect of the variable GSES ================ -->
 
@@ -310,7 +482,6 @@ ggplot(subdat, aes(x = GSES_tot, y = WHOQOL_d2_raw_score)) +
 
 La variable `GSES` modère la variable `PSS14`.
 
-
 ```{r lm_psy_pss14_gses}
 
 m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * GSES_tot, hs)
@@ -320,7 +491,6 @@ summary(m)
 
 L'effet de la variable `PSS14` sur la variable `WHOQOL_PSY` diminue quand la
 variable `GSES` augmente.
-
 
 ```{r fig_psy_pss14_gses, out.width="100%"}
 
@@ -334,6 +504,45 @@ expand.grid(
   geom_line()
 
 ```
+
+
+
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r fig_psy_gses, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS10_tot", "WHOQOL_d2_raw_score", "GSES_tot")])
+ggplot(subdat, aes(x = GSES_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+```{r lm_psy_pss10_gses}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS10_tot * GSES_tot, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss10_gses, out.width="100%"}
+
+expand.grid(
+  PSS10_tot = subdat$PSS10_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  GSES_tot = seq(10, 40, 5)
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(GSES_tot = factor(GSES_tot)) %>%
+  ggplot(aes(x = PSS10_tot, y = pred_WHOQOL_d2_raw_score, color = GSES_tot)) +
+  geom_line()
+
+```
+
+</details>
+<!-- END PSS10 -->
 
 ```{r cleaning, echo=FALSE}
 rm(m, subdat)
@@ -381,6 +590,44 @@ expand.grid(
 
 ```
 
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r fig_psy_cdrisc, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS10_tot", "WHOQOL_d2_raw_score", "CD_RISC_tot")])
+ggplot(subdat, aes(x = CD_RISC_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+```{r lm_psy_pss10_cdrisc}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS10_tot * CD_RISC_tot, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss10_cdrisc, out.width="100%"}
+
+expand.grid(
+  PSS10_tot = subdat$PSS10_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  CD_RISC_tot = seq(0, 40, 5)
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(CD_RISC_tot = factor(CD_RISC_tot)) %>%
+  ggplot(aes(x = PSS10_tot, y = pred_WHOQOL_d2_raw_score,
+             color = CD_RISC_tot)) +
+  geom_line()
+
+```
+
+</details>
+<!-- END PSS10 -->
+
 ```{r cleaning, echo=FALSE}
 rm(m, subdat)
 ```
@@ -426,6 +673,44 @@ expand.grid(
   geom_line()
 
 ```
+
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r fig_psy_maas, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS10_tot", "WHOQOL_d2_raw_score", "MAAS_tot")])
+ggplot(subdat, aes(x = MAAS_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+```{r lm_psy_pss10_maas}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS10_tot * MAAS_tot, hs)
+summary(m)
+
+```
+
+```{r fig_psy_pss10_maas, out.width="100%"}
+
+expand.grid(
+  PSS10_tot = subdat$PSS10_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MAAS_tot = seq(20, 90, 10)
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MAAS_tot = factor(MAAS_tot)) %>%
+  ggplot(aes(x = PSS10_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MAAS_tot)) +
+  geom_line()
+
+```
+
+</details>
+<!-- END PSS10 -->
 
 ```{r cleaning, echo=FALSE}
 rm(m, subdat)
@@ -473,6 +758,12 @@ expand.grid(
 
 ```
 
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+Les étudiants ayant eu le PSS10 n'ont pas eu le MSPSS.
+</details>
+<!-- END PSS10 -->
+
 ```{r cleaning, echo=FALSE}
 rm(m, subdat)
 ```
@@ -500,22 +791,131 @@ f <- file.remove(f)
 rm(f, fig, garbage, subdat)
 ```
 
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r fig_cor_moderators, out.width="100%"}
+subdat <- na.omit(hs[c("PSS10_tot", "WHOQOL_d2_raw_score", "GSES_tot",
+                       "CD_RISC_tot", "MAAS_tot", "MSPSS_tot")])
+fig <- ggpairs(subdat, progress = FALSE) +
+  labs(caption = paste("Nombre d'observations :", nrow(subdat)))
+fig
+```
+
+```{r export_fig_cor_moderators, echo=FALSE}
+f <- "/tmp/fig_cor_moderators.pdf"
+cairo_pdf(f, width = 14, height = 14, onefile = TRUE)
+print(fig)
+garbage <- dev.off()
+embed_file(f, text = "Figure (pdf)")
+f <- file.remove(f)
+rm(f, fig, garbage, subdat)
+```
+
+</details>
+<!-- END PSS10 -->
+
+<!-- ====================================================================== -->
+
 ## Modèle multivariable
 
 ```{r multivariable_model}
-m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * GSES_tot + PSS14_tot * CD_RISC_tot +
-          PSS14_tot * MAAS_tot + PSS14_tot * MSPSS_tot, hs)
+X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot", "MSPSS_tot")
+if (temps == 0.5) X <- c(X, "PTGI_tot")
+fml <- paste("WHOQOL_d2_raw_score  ~",
+             paste(paste("PSS14_tot *", X), collapse = " + "))
+fml <- as.formula(fml)
+m <- do.call("lm", list(formula = fml, data = quote(hs)))
 summary(m)
-s <- step(m, direction = "both", trace = FALSE)
-summary(s)
+#s <- step(m, direction = "both", trace = FALSE)
+#summary(s)
 ggplot(m) +
   stat_qq(aes(sample = .stdresid)) +
   geom_abline() +
   labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
        title = "Normal Q-Q Plot") +
   theme_classic()
-rm(m, s)
 ```
+
+```{r multivariable_model_table}
+Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar"), function(x) {
+  if (x == "multivar") {
+    m0 <- m
+  } else {
+    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS14_tot *", x))
+    m0 <- lm(fml, m$model)
+  }
+  beta <- coef(m0)
+  pv <- coef(summary(m0))[, "Pr(>|t|)"]
+  tbl <- cbind(data.frame(coef = names(beta), beta = beta),
+               confint(m0), pval =pv)
+  rownames(tbl) <- NULL
+  colnames(tbl)[-1] <-
+    paste0(colnames(tbl)[-1], " (", sub("_tot$", "", x), ")")
+  return(tbl)
+}))
+```
+
+```{r multivariable_model_export_table, echo=FALSE}
+f <- "/tmp/multivariable_model.xlsx"
+write_xlsx(list(multivariable_model = reg_tbl), f)
+embed_file(f, text = "multivariable_model (xlsx)")
+f <- file.remove(f)
+rm(X, fml, m, reg_tbl, f)
+```
+
+<!-- BEGIN PSS10 -->
+<details><summary>PSS10</summary>
+
+```{r multivariable_model}
+X <- c("GSES_tot", "CD_RISC_tot", "MAAS_tot")
+if (temps == 0.5) X <- c(X, "PTGI_tot")
+fml <- paste("WHOQOL_d2_raw_score  ~",
+             paste(paste("PSS10_tot *", X), collapse = " + "))
+fml <- as.formula(fml)
+m <- do.call("lm", list(formula = fml, data = quote(hs)))
+summary(m)
+#s <- step(m, direction = "both", trace = FALSE)
+#summary(s)
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+```
+
+```{r multivariable_model_table}
+Merge <- function(x, y) merge(x, y, by = "coef", all = TRUE, sort = FALSE)
+reg_tbl <- Reduce(Merge, lapply(c(X, "multivar"), function(x) {
+  if (x == "multivar") {
+    m0 <- m
+  } else {
+    fml <- as.formula(paste("WHOQOL_d2_raw_score  ~ PSS10_tot *", x))
+    m0 <- lm(fml, m$model)
+  }
+  beta <- coef(m0)
+  pv <- coef(summary(m0))[, "Pr(>|t|)"]
+  tbl <- cbind(data.frame(coef = names(beta), beta = beta),
+               confint(m0), pval =pv)
+  rownames(tbl) <- NULL
+  colnames(tbl)[-1] <-
+    paste0(colnames(tbl)[-1], " (", sub("_tot$", "", x), ")")
+  return(tbl)
+}))
+```
+
+```{r multivariable_model_export_table, echo=FALSE}
+f <- "/tmp/multivariable_model.xlsx"
+write_xlsx(list(multivariable_model = reg_tbl), f)
+embed_file(f, text = "multivariable_model (xlsx)")
+f <- file.remove(f)
+rm(X, fml, m, reg_tbl, f)
+```
+
+</details>
+<!-- END PSS10 -->
 
 ## Flourish index
 
