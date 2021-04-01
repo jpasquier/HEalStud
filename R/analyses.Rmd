@@ -1,0 +1,949 @@
+---
+title: "Etude HealStud - Analyse des données à T`r params$temps`"
+author: "Jérôme Pasquier"
+date: "`r params$date`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 4
+    toc_float: false
+    code_folding: hide
+params:
+    temps: 0
+    date: ""
+---
+
+<!--
+Zoom function in rmarkdown html plot
+Source: https://stackoverflow.com/questions/56361986/
+-->
+
+```{css zoom-lib-src, echo = FALSE}
+script src = "https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"
+```
+
+```{js zoom-jquery, echo = FALSE}
+ $(document).ready(function() {
+    $('body').prepend('<div class=\"zoomDiv\"><img src=\"\" class=\"zoomImg\"></div>');
+    // onClick function for all plots (img's)
+    $('img:not(.zoomImg)').click(function() {
+      $('.zoomImg').attr('src', $(this).attr('src')).css({width: '100%'});
+      $('.zoomDiv').css({opacity: '1', width: 'auto', border: '1px solid white', borderRadius: '5px', position: 'fixed', top: '50%', left: '50%', marginRight: '-50%', transform: 'translate(-50%, -50%)', boxShadow: '0px 0px 50px #888888', zIndex: '50', overflow: 'auto', maxHeight: '100%'});
+    });
+    // onClick function for zoomImg
+    $('img.zoomImg').click(function() {
+      $('.zoomDiv').css({opacity: '0', width: '0%'}); 
+    });
+  });
+```
+
+<!-- =============================== Setup ================================ -->
+
+```{r setup, message=FALSE}
+
+library(knitr)
+library(dplyr)
+library(labelled)
+library(pander)
+library(psych)
+library(lavaan)
+library(ggplot2)
+#library(scales)
+library(GGally)
+library(semPlot)
+library(xfun)
+library(XLConnect)
+library(writexl)
+
+# --------------------------------- Options --------------------------------- #
+
+options(knitr.kable.NA = "")
+
+# ---------------------------- Working directory ---------------------------- #
+
+# setwd("~/Projects/LaSource/Guzman - Healthy Students/R")
+
+# -------------------------------- Load data -------------------------------- #
+
+temps <- params$temps
+load("../data/hs_20201119.rda")
+hs <- hs[hs$Temps == temps, ]
+```
+
+<!-- ======================= Descriptive statistics ======================= -->
+
+
+## Statistiques descriptives
+
+Une description de la distribution de chaque variable de la base de données se
+trouve dans les fichiers ci-dessous.
+
+```{r descr_stat}
+
+# ------------------------- Descriptive statistics -------------------------- #
+
+X <- c("WHOQOL_(1|2|d[1-4]_.+)", "PSS14_tot", "PSS10_tot", "GSES_tot",
+       "CD_RISC_tot", "MAAS_tot", "^MSPSS_.+", "(S)?HFI_(d[1-6]|tot)",
+       "Act_lucrative", "Annee_etude", "Bon", "Domaine", "ENSA", "Etat_civil",
+       "Filiere", "Follow_up", "HESSOGeneve", "Recrutement", "Sexe")
+if (temps == 0.5) {
+  X <- X[X != "PSS10_tot"]
+  X <- c(X, "HEalStud_1", "COVID19_[1-4]", "PTGI_.+")
+}
+X <- paste0("^", X, "$")
+X <- do.call(base::c, lapply(X, grep, x = names(hs), value = TRUE))
+fig_descr <- list()
+tbl_descr <- do.call(rbind, lapply(X, function(x) {
+  if (any(class(hs[[x]]) == "haven_labelled")) hs[[x]] <- to_factor(hs[[x]])
+  type <- paste(class(hs[[x]]), collapse = " ")
+  z <- na.omit(hs[[x]])
+  if (any(class(hs[[x]]) %in% c("factor", "logical"))) {
+    tab <- table(z)
+    tab <- cbind(tab, prop.table(tab))
+    tab <- data.frame(rownames(tab), tab)
+    if (any(nchar(as.character(z)) > 15)) {
+      rotate <- TRUE
+      levels(hs[[x]]) <- sapply(levels(hs[[x]]), function(w) {
+        if (nchar(w) > 15) w <- paste0(substr(w, 1, 12), "...")
+        w
+      })
+    } else {
+      rotate <- FALSE
+    }
+    fig <- ggplot(hs[!is.na(hs[[x]]), ], aes_string(x = x)) +
+      geom_bar(aes(y = (..count..)/sum(..count..)), fill = "steelblue") +
+      scale_y_continuous(labels=scales::percent) +
+      labs(y = "Fréquences relatives") +
+      theme_classic()
+    if (rotate) {
+      fig <- fig +
+        theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    }
+    fig_descr[[x]] <<- fig
+  } else if (class(hs[[x]]) %in% c("numeric", "integer")) {
+    tab <- data.frame(
+      c("Mean/SD", "Median/IQR", "Min/Max"),
+      c(mean(z), median(z), min(z)),
+      c(sd(z), IQR(z), max(z))
+    )
+    brx <- pretty(range(z), n = nclass.Sturges(z), min.n = 1)
+    fig <- ggplot(hs[!is.na(hs[[x]]), ], aes_string(x = x)) +
+      geom_histogram(color = "darkgray", fill = "steelblue", breaks = brx)
+    y_range <- ggplot_build(fig)$layout$panel_params[[1]]$y.range
+    fig <- fig +
+      geom_boxplot(aes(y = y_range[2] * 1.1),
+                   width = sum(y_range * c(-1, 1)) / 10) +
+      theme_classic()
+    fig_descr[[x]] <<- fig
+  } else {
+    stop(paste0(x, ": unsupported type (", type, ")"))
+  }
+  tab <- cbind(x, type, sum(is.na(hs[[x]])), tab)
+  names(tab) <- 
+    c("Variable", "Type", "Nmiss", "Value", "(N)", "(Prop)")
+  rownames(tab) <- NULL
+  return(tab)
+}))
+rm(X)
+
+```
+
+<!-- =========================== Export tables ============================ -->
+
+```{r descr_stat_export_tables, echo=FALSE}
+
+# ------------------------------ Export tables ------------------------------ #
+
+f <- "/tmp/descr_stat.xlsx"
+if (file.exists(f)) file.remove(f)
+wb <- loadWorkbook(f, create = TRUE)
+## Init WB
+r <- tbl_descr
+s <- "descr (table 1)"
+mc_var <- list(r$Variable)
+mc_list <- c("B", "C")
+createSheet(wb, name = s)
+writeWorksheet(wb, r, sheet = s)
+## Merged cells
+mc <- aggregate(1:nrow(r), mc_var, function(x) {
+  if(length(x) > 1) {
+    x <- x + 1
+    out <- paste0("A", min(x), ":A", max(x))
+  } else {
+    out <- NA
+  }
+  return(out)
+})[, length(mc_var) + 1]
+mc <- mc[!is.na(mc)]
+mc <- c(mc, sapply(mc_list, function(z) gsub("A", z, mc)))
+mergeCells(wb, sheet = s, reference = mc)
+## Borders
+cs <- createCellStyle(wb)
+setBorder(cs, side = "top", type = XLC$"BORDER.THIN",
+          color = XLC$"COLOR.BLACK")
+for(i in aggregate(1:nrow(r), mc_var, min)[, length(mc_var) + 1] + 1) {
+  setCellStyle(wb, sheet = s, row = i, col = 1:ncol(r), cellstyle = cs)
+}
+## Colors
+cs <- createCellStyle(wb)
+setFillPattern(cs, fill = XLC$"FILL.SOLID_FOREGROUND")
+setFillForegroundColor(cs, color = XLC$"COLOR.YELLOW")
+## Save WB
+saveWorkbook(wb)
+## Export file
+embed_file(f, text = "Statistiques descriptives (xlsx)")
+f <- file.remove(f)
+## Remove unused variables
+rm(f, wb, r, s, mc_var, mc_list, mc, cs, i)
+
+```
+
+<!-- =========================== Export figures =========================== -->
+
+```{r descr_stat_export_figures, echo=FALSE}
+
+# ----------------------------- Export figures ------------------------------ #
+
+f <- "/tmp/descr_stat.pdf"
+cairo_pdf(f, onefile = TRUE)
+for (fig in fig_descr) print(fig)
+garbage <- dev.off()
+embed_file(f, text = "Statistiques descriptives (pdf)")
+f <- file.remove(f)
+rm(f, fig, garbage)
+
+```
+
+<!-- =========== Correlation betwwen PSS14 and WHOQOL-BREF-PSY ============ -->
+
+## Corrélation entre le score PSS-14 et le score WHOQOL-BREF-PSY
+
+```{r cor_pss14_whoqolpsy_1}
+
+# -------------- Correlation betwwen PSS14 and WHOQOL-BREF-PSY -------------- #
+
+# Select complete cases
+subdat <- na.omit(hs[c("WHOQOL_d2_raw_score", "PSS14_tot")])
+# Number of complete cases
+n <- nrow(subdat)
+# Pearson coefficient
+p <- cor.test(subdat$WHOQOL_d2_raw_score, subdat$PSS14_tot)
+# Spearman coefficient
+s <- cor.test(subdat$WHOQOL_d2_raw_score, subdat$PSS14_tot,
+              method = "spearman", exact = FALSE)
+# Confidence interval of the Spearman coefficient
+sci <- tanh(atanh(s$estimate) + c(-1, 1) * qnorm(0.975) / sqrt(n - 3))
+
+```
+
+```{r cor_pss14_whoqolpsy_2, echo=FALSE}
+
+p_char <- paste0(
+  signif(p$estimate, 3),
+  " (IC [",
+  paste(signif(p$conf.int, 3), collapse = ";"),
+  "], p",
+  ifelse(p$p.value < .001, "<.001", paste0("=", round(p$p.value, 3))),
+  ")"
+)
+s_char <- paste0(
+  signif(s$estimate, 3),
+  " (IC [",
+  paste(signif(sci, 3), collapse = ";"),
+  "], p",
+  ifelse(s$p.value < .001, "<.001", paste0("=", round(s$p.value, 3))),
+  ")"
+)
+
+```
+
+Il y a `r n` observations pour lesquelles les deux variables sont disponibles.
+Le coeficient de corrélation de Pearson est égal à `r p_char` et celui de
+Spearman est égal à `r s_char`.
+
+Un analyse de régression linéaire fait également ressortir l'association entre
+les deux variables.
+
+```{r cor_pss14_whoqolpsy_3, out.width="100%"}
+
+# ----------- Linear resgression WHOQOL_d2_raw_score ~ PSS14_tot ------------ #
+
+m <- lm(WHOQOL_d2_raw_score ~ PSS14_tot, subdat)
+summary(m)
+
+ggplot(subdat, aes(x = PSS14_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, n, p, p_char, s, s_char, sci, subdat)
+```
+
+<!-- =============== Moderator effect of the variable GSES ================ -->
+
+## Effets modérateur de la variable GSES
+
+On observe une association entre la variable `GSES` et la variable 
+`WHOQOL_d2_raw_score`
+
+```{r fig_psy_gses, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "GSES_tot")])
+ggplot(subdat, aes(x = GSES_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+La variable `GSES` modère la variable `PSS14`.
+
+
+```{r lm_psy_pss14_gses}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * GSES_tot, hs)
+summary(m)
+
+```
+
+L'effet de la variable `PSS14` sur la variable `WHOQOL_PSY` diminue quand la
+variable `GSES` augmente.
+
+
+```{r fig_psy_pss14_gses, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  GSES_tot = seq(10, 40, 5)
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(GSES_tot = factor(GSES_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score, color = GSES_tot)) +
+  geom_line()
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable CD-RISC
+
+On observe une association entre la variable `CD_RISC` et la variable 
+`WHOQOL_d2_raw_score`
+
+```{r fig_psy_cdrisc, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "CD_RISC_tot")])
+ggplot(subdat, aes(x = CD_RISC_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+La variable `CD_RISC` modère la variable `PSS14`.
+
+```{r lm_psy_pss14_cdrisc}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * CD_RISC_tot, hs)
+summary(m)
+
+```
+
+L'effet de la variable `PSS14` sur la variable `WHOQOL_PSY` diminue quand la
+variable `CD_RISC` augmente.
+
+```{r fig_psy_pss14_cdrisc, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  CD_RISC_tot = seq(0, 40, 5)
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(CD_RISC_tot = factor(CD_RISC_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = CD_RISC_tot)) +
+  geom_line()
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable MAAS
+
+On observe une association entre la variable `MAAS` et la variable 
+`WHOQOL_d2_raw_score`
+
+```{r fig_psy_maas, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "MAAS_tot")])
+ggplot(subdat, aes(x = MAAS_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+La variable `MAAS` modère la variable `PSS14`.
+
+```{r lm_psy_pss14_maas}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MAAS_tot, hs)
+summary(m)
+
+```
+
+L'effet de la variable `PSS14` sur la variable `WHOQOL_PSY` diminue quand la
+variable `MAAS` augmente.
+
+```{r fig_psy_pss14_maas, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MAAS_tot = seq(20, 90, 10)
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MAAS_tot = factor(MAAS_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MAAS_tot)) +
+  geom_line()
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Effet modérateur de la variable MSPSS
+
+On observe une association entre la variable `MSPSS` et la variable 
+`WHOQOL_d2_raw_score`
+
+```{r fig_psy_mspss, out.width="100%"}
+
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "MSPSS_tot")])
+ggplot(subdat, aes(x = MSPSS_tot, y = WHOQOL_d2_raw_score)) +
+  geom_point() +
+  geom_smooth(formula = y ~ x, method = lm) +
+  labs(caption = paste(nrow(subdat), "observations")) +
+  theme_classic()
+
+```
+
+La variable `MSPSS` modère la variable `PSS14`.
+
+```{r lm_psy_pss14_mspss}
+
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * MSPSS_tot, hs)
+summary(m)
+
+```
+
+L'effet de la variable `PSS14` sur la variable `WHOQOL_PSY` diminue quand la
+variable `MSPSS` augmente.
+
+```{r fig_psy_pss14_mspss, out.width="100%"}
+
+expand.grid(
+  PSS14_tot = subdat$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
+  MSPSS_tot = 1:7
+) %>%
+  cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
+  mutate(MSPSS_tot = factor(MSPSS_tot)) %>%
+  ggplot(aes(x = PSS14_tot, y = pred_WHOQOL_d2_raw_score,
+             color = MSPSS_tot)) +
+  geom_line()
+
+```
+
+```{r cleaning, echo=FALSE}
+rm(m, subdat)
+```
+
+## Corrélation entre les variables modératrices
+
+Les variables modératrices sont corrélées entre elles et ont sensiblement toute
+le même effet sur la relation entre les variables `PSS14` et `WHOQOL_PSY`.
+
+```{r fig_cor_moderators, out.width="100%"}
+subdat <- na.omit(hs[c("PSS14_tot", "WHOQOL_d2_raw_score", "GSES_tot",
+                       "CD_RISC_tot", "MAAS_tot", "MSPSS_tot")])
+fig <- ggpairs(subdat, progress = FALSE) +
+  labs(caption = paste("Nombre d'observations :", nrow(subdat)))
+fig
+```
+
+```{r export_fig_cor_moderators, echo=FALSE}
+f <- "/tmp/fig_cor_moderators.pdf"
+cairo_pdf(f, width = 14, height = 14, onefile = TRUE)
+print(fig)
+garbage <- dev.off()
+embed_file(f, text = "Figure (pdf)")
+f <- file.remove(f)
+rm(f, fig, garbage, subdat)
+```
+
+## Modèle multivariable
+
+```{r multivariable_model}
+m <- lm(WHOQOL_d2_raw_score  ~ PSS14_tot * GSES_tot + PSS14_tot * CD_RISC_tot +
+          PSS14_tot * MAAS_tot + PSS14_tot * MSPSS_tot, hs)
+summary(m)
+s <- step(m, direction = "both", trace = FALSE)
+summary(s)
+ggplot(m) +
+  stat_qq(aes(sample = .stdresid)) +
+  geom_abline() +
+  labs(x = "Theoretical Quantiles", y = "Standardized Residuals",
+       title = "Normal Q-Q Plot") +
+  theme_classic()
+rm(m, s)
+```
+
+## Flourish index
+
+### Descriptive statistics
+
+```{r fi_descr_stat}
+tbl <- do.call(rbind, lapply(1:12, function(i) {
+  v <- paste0("HFI", i)
+  x <- na.omit(hs[[v]])
+  d <- as.integer(ceiling(i / 2))
+  data.frame(Question = i, Dimension = d, Variable = v, Nobs = length(x),
+             Mean = mean(x), SD = sd(x))
+}))
+kable(tbl, digits = 2)
+```
+
+```{r fi_descr_stat_exp_tbl, echo=FALSE}
+f <- "/tmp/flourish_index_descr_stat.xlsx"
+write_xlsx(list(fi_descr_stat = tbl), f)
+embed_file(f, text = "Flourish index - Descriptive statistics (xlsx)")
+f <- file.remove(f)
+rm(tbl, f)
+```
+
+### Correlation matrix
+
+```{r fi_cor_mat}
+subdat <- na.omit(hs[paste0("HFI", 1:12)])
+subdat <- as.data.frame(lapply(subdat, as.numeric))
+tbl <- cor(subdat)
+kable(tbl, digits = 2)
+```
+
+```{r fi_cor_mat_exp_tbl, echo=FALSE}
+f <- "/tmp/flourish_index_correlation_matrix.xlsx"
+tbl <- cbind(rownames(tbl), as.data.frame(tbl))
+names(tbl) <- c("", names(tbl)[-1])
+write_xlsx(list(fi_cor_mat = tbl), f)
+embed_file(f, text = "Flourish index - Correlation matrix (xlsx)")
+f <- file.remove(f)
+```
+
+```{r fi_cor_fig_export, echo=FALSE}
+fig <- ggpairs(subdat, progress = FALSE) +
+  labs(caption = paste("Nombre d'observations :", nrow(subdat)))
+f <- "/tmp/flourish_index_correlation_figure.pdf"
+cairo_pdf(f, width = 21, height = 21, onefile = TRUE)
+print(fig)
+garbage <- dev.off()
+embed_file(f, text = "Flourish index - Correlation matrix (pdf)")
+f <- file.remove(f)
+rm(f, fig, garbage, subdat, tbl)
+```
+
+### Exploratory factor analysis
+
+Principal factor analysis with oblimin rotation
+
+#### Flourish Index - Factor loadings
+
+```{r efa_fi, message=FALSE}
+subdat <- na.omit(hs[paste0("HFI", 1:10)])
+subdat <- as.data.frame(lapply(subdat, as.numeric))
+ld <- do.call(cbind, lapply(2:5, function(nfac) {
+  efa <- fa(subdat, nfactors = nfac, rotate = "oblimin", SMC = FALSE, fm ="pa")
+  ld <- as.data.frame(matrix(as.numeric(efa$loadings), ncol = nfac))
+  rownames(ld) <- paste0("HFI", 1:10)
+  colnames(ld) <- paste0(nfac, ".F", 1:nfac)
+  ld
+}))
+tbl <- ld
+tbl[abs(tbl) < 0.3] <- NA
+kable(tbl, digits = 2)
+```
+
+```{r efa_fi_export_loadings, echo=FALSE}
+f <- "/tmp/fi_efa_factor_loadings.xls"
+write_xlsx(list(fi_efa_factor_loadings = tbl), f)
+embed_file(f, text = "Flourish index - Factor loadings (xlsx)")
+f <- file.remove(f)
+rm(subdat, ld, tbl, f)
+```
+
+#### Secure Flourish Index - Factor loadings
+
+```{r efa_sfi}
+subdat <- na.omit(hs[paste0("HFI", 1:12)])
+subdat <- as.data.frame(lapply(subdat, as.numeric))
+ld <- do.call(cbind, lapply(2:6, function(nfac) {
+  efa <- fa(subdat, nfactors = nfac, rotate = "oblimin", SMC = FALSE, fm ="pa")
+  ld <- as.data.frame(matrix(as.numeric(efa$loadings), ncol = nfac))
+  rownames(ld) <- paste0("HFI", 1:12)
+  colnames(ld) <- paste0(nfac, ".F", 1:nfac)
+  ld
+}))
+tbl <- ld
+tbl[abs(tbl) < 0.3] <- NA
+kable(tbl, digits = 2)
+```
+
+```{r efa_sfi_export_loadings, echo = FALSE}
+f <- "/tmp/sfi_efa_factor_loadings.xls"
+write_xlsx(list(sfi_efa_factor_loadings = tbl), f)
+embed_file(f, text = "Secure Flourish index - Factor loadings (xlsx)")
+f <- file.remove(f)
+rm(subdat, ld, tbl, f)
+```
+
+### Confirmatory factor analysis
+
+```{r cfa_fi_fits}
+subdat <- na.omit(hs[paste0("HFI", 1:12)])
+models <- list(
+  fi_unidim = paste("FI =~", paste(paste0("HFI", 1:10), collapse = " + ")),
+  fi_secorder = " d1 =~ HFI1 + HFI2
+                  d2 =~ HFI3 + HFI4
+                  d3 =~ HFI5 + HFI6
+                  d4 =~ HFI7 + HFI8
+                  d5 =~ HFI9 + HFI10
+                  FI =~ d1 + d2 + d3 + d4 + d5 ",
+  fi_bifactor = " d1 =~ HFI1 + HFI2
+                 d2 =~ HFI3 + HFI4
+                 d3 =~ HFI5 + HFI6
+                 d4 =~ HFI7 + HFI8
+                 d5 =~ HFI9 + HFI10
+                 FI =~ HFI1 + HFI2 + HFI3 + HFI4 + HFI5 +
+                   HFI6 + HFI7 + HFI8 + HFI9 + HFI10 ",
+                 #                  d1 ~~ 0*d2
+                 #                  d1 ~~ 0*d3
+                 #                  d1 ~~ 0*d4
+                 #                  d1 ~~ 0*d5
+                 #                  d1 ~~ 0*FI
+                 #                  d2 ~~ 0*d3
+                 #                  d2 ~~ 0*d4
+                 #                  d2 ~~ 0*d5
+                 #                  d2 ~~ 0*FI
+                 #                  d3 ~~ 0*d4
+                 #                  d3 ~~ 0*d5
+                 #                  d3 ~~ 0*FI
+                 #                  d4 ~~ 0*d5
+                 #                  d4 ~~ 0*FI
+                 #                  d5 ~~ 0*FI ",
+  sfi_unidim = paste("SFI =~", paste(paste0("HFI", 1:12), collapse = " + ")),
+  sfi_secorder = " d1 =~ HFI1 + HFI2
+                   d2 =~ HFI3 + HFI4
+                   d3 =~ HFI5 + HFI6
+                   d4 =~ HFI7 + HFI8
+                   d5 =~ HFI9 + HFI10
+                   d6 =~ HFI11 + HFI12
+                   SFI =~ d1 + d2 + d3 + d4 + d5 + d6",
+  sfi_bifactor = " d1 =~ HFI1 + HFI2
+                  d2 =~ HFI3 + HFI4
+                  d3 =~ HFI5 + HFI6
+                  d4 =~ HFI7 + HFI8
+                  d5 =~ HFI9 + HFI10
+                  d6 =~ HFI11 + HFI12
+                  SFI =~ HFI1 + HFI2 + HFI3 + HFI4 + HFI5 + HFI6 +
+                    HFI7 + HFI8 + HFI9 + HFI10 + HFI11 + HFI12 "
+)
+evals_list <- lapply(models, function(m) {
+  evals(paste0("cfa(m, subdat, orthogonal = TRUE, std.lv = TRUE)"),
+        env = environment(), graph.dir = "/tmp")[[1]]
+})
+msgs <- lapply(evals_list, function(r) r$msg)
+fits <- lapply(evals_list, function(r) r$result)
+```
+
+```{r cfa_fi_export_diagrams, echo=FALSE}
+f <- "/tmp/cfa_fi_diagrams.pdf"
+pdf(f, width = 16, height = 9)
+layout(matrix(byrow = TRUE, nrow = 2, 1:6))
+semPaths(fits[[1]], "model", "std", fixedStyle = c("white", 0))
+title("Flourish index - Uni-dimensional model")
+semPaths(fits[[2]], "model", "std", fixedStyle = c("white", 0))
+title("Flourish index - Second-order model")
+semPaths(fits[[3]], "model", "std", fixedStyle = c("white", 0),
+         bifactor = "FI", layout = "tree2")
+title("Flourish index - Bi-factor model")
+semPaths(fits[[4]], "model", "std", fixedStyle = c("white", 0))
+title("Secure flourish index - Uni-dimensional model")
+semPaths(fits[[5]], "model", "std", fixedStyle = c("white", 0))
+title("Secure flourish index - Second-order model")
+semPaths(fits[[6]], "model", "std", fixedStyle = c("white", 0),
+         bifactor = "SFI", layout = "tree2")
+title("Secure flourish index - Bi-factor model")
+garbage <- dev.off()
+
+embed_file(f, text = "CFA - Diagrams (pdf)")
+f <- file.remove(f)
+rm(f, garbage)
+```
+
+#### Fit summary
+
+<details><summary>Flourish index - Uni-dimensional model</summary>
+```{r cfa_fi_unidim_summary, echo=FALSE}
+if (!is.null(msgs[[1]]$warnings)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[1]]$warnings))
+}
+if (!is.null(msgs[[1]]$errors)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[1]]$errors))
+}
+summary(fits[[1]], fit.measures = TRUE)
+```
+</details>
+<details><summary>Flourish index - Second-order model</summary>
+```{r cfa_fi_secorder_summary, echo=FALSE}
+if (!is.null(msgs[[2]]$warnings)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[2]]$warnings))
+}
+if (!is.null(msgs[[2]]$errors)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[2]]$errors))
+}
+summary(fits[[2]], fit.measures = TRUE)
+```
+</details>
+<details><summary>Flourish index - Bi-factor model</summary>
+```{r cfa_fi_bifactor_summary, echo=FALSE}
+if (!is.null(msgs[[3]]$warnings)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[3]]$warnings))
+}
+if (!is.null(msgs[[3]]$errors)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[3]]$errors))
+}
+summary(fits[[3]], fit.measures = TRUE)
+```
+</details>
+
+<details><summary>Secure flourish index - Uni-dimensional model</summary>
+```{r cfa_sfi_unidim_summary, echo=FALSE}
+if (!is.null(msgs[[4]]$warnings)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[4]]$warnings))
+}
+if (!is.null(msgs[[4]]$errors)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[4]]$errors))
+}
+summary(fits[[4]], fit.measures = TRUE)
+```
+</details>
+<details><summary>Secure flourish index - Second-order model</summary>
+```{r cfa_sfi_secorder_summary, echo=FALSE}
+if (!is.null(msgs[[5]]$warnings)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[5]]$warnings))
+}
+if (!is.null(msgs[[5]]$errors)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[5]]$errors))
+}
+summary(fits[[5]], fit.measures = TRUE)
+```
+</details>
+<details><summary>Secure flourish index - Bi-factor model</summary>
+```{r cfa_sfi_bifactor_summary, echo=FALSE}
+if (!is.null(msgs[[6]]$warnings)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[6]]$warnings))
+}
+if (!is.null(msgs[[6]]$errors)) {
+  gsub(" +", " ", gsub("\\n", " ", msgs[[6]]$errors))
+}
+summary(fits[[6]], fit.measures = TRUE)
+```
+</details>
+
+#### Models fit
+
+```{r cfa_fi_fit_measures, out.width="100%"}
+tbl <- do.call(rbind, lapply(names(fits), function(z) {
+  s <- strsplit(z, "_")[[1]][[1]]
+  s <- c(fi = "Flourish index", sfi = "Secure flourish index")[s]
+  m <- strsplit(z, "_")[[1]][[2]]
+  m <- c(unidim = "Uni-dimensional", secorder = "Second-order",
+         bifactor = "Bi-factor")[m]
+  measures <- c("cfi", "tli", "rmsea", "srmr")
+  if (lavInspect(fits[[z]], "converged")) {
+    r <- fitMeasures(fits[[z]], measures) %>%
+      {setNames(as.numeric(.), names(.))}
+  } else {
+    r <- setNames(rep(NA, length(measures)), measures)
+  }
+  cbind(Score = s, Model = m, data.frame(t(r)))
+}))
+kable(tbl, row.names = FALSE)
+```
+
+```{r cfa_fi_fit_measures_export_table, echo=FALSE}
+f <- "/tmp/cfa_fi_fit_measures.xls"
+write_xlsx(list(cfa_fi_fit_measures = tbl), f)
+embed_file(f, text = "Flourish index - CFA fit measures (xlsx)")
+f <- file.remove(f)
+rm(tbl, f)
+```
+
+#### Factor loadings
+
+```{r cfa_fi_bifactor_loadings}
+tbl1 <- lavInspect(fits[[3]], what = "est")$lambda
+colnames(tbl1) <- paste0("FI.", colnames(tbl1))
+tbl2 <- lavInspect(fits[[6]], what = "est")$lambda
+colnames(tbl2) <- paste0("SFI.", colnames(tbl2))
+tbl <- merge(tbl1, tbl2, by = "row.names", all = TRUE, sort = FALSE)
+kable(tbl, digits = 2)
+```
+
+```{r  cfa_fi_bifactor_loadings_export_table, echo=FALSE}
+f <- "/tmp/cfa_fi_bifactor_loadings.xls"
+write_xlsx(list(cfa_fi_fit_measures = tbl), f)
+embed_file(f, text = "Loadings of bi-factor models (xlsx)")
+f <- file.remove(f)
+rm(tbl1, tbl2, tbl, f)
+```
+
+#### Standardized factor loadings
+
+```{r cfa_fi_bifactor_loadings}
+tbl1 <- lavInspect(fits[[3]], what = "std")$lambda
+colnames(tbl1) <- paste0("FI.", colnames(tbl1))
+tbl2 <- lavInspect(fits[[6]], what = "std")$lambda
+colnames(tbl2) <- paste0("SFI.", colnames(tbl2))
+tbl <- merge(tbl1, tbl2, by = "row.names", all = TRUE, sort = FALSE)
+kable(tbl, digits = 2)
+```
+
+```{r  cfa_fi_bifactor_loadings_export_table, echo=FALSE}
+f <- "/tmp/cfa_fi_bifactor_standardized_loadings.xls"
+write_xlsx(list(cfa_fi_fit_measures = tbl), f)
+embed_file(f, text = "Standardized loadings of bi-factor models (xlsx)")
+f <- file.remove(f)
+rm(tbl1, tbl2, tbl, f)
+```
+
+#### Reliability
+
+<!--
+  References :
+  reise2010bifactor
+  reise2013multidimensionality
+-->
+
+```{r cfa_fi_bifactor_reliability}
+
+# Function that calculates the differences reliability measures
+bifactrel <- function(index = "fi", std = FALSE) {
+  if (index == "fi") {
+    fit <- fits[[3]]
+    k <- 5
+  } else {
+    fit <- fits[[6]]
+    k <- 6
+  }
+  if (std) what = "std" else what = "est"
+  n <- rep(2, k)
+  lambda <- lavInspect(fit, what = what)$lambda
+  theta <- diag(lavInspect(fit, what = what)$theta)
+  j <- grep("^(S)?FI$", colnames(lambda))
+  ecv <- sum(lambda[, j]^2) / sum(lambda^2)
+  puc <- 1 - sum(n * (n - 1) / 2) / (sum(n) * (sum(n) - 1) / 2)
+  omegah <- sum(lambda[, j])^2 /
+    (sum(lambda[, j])^2 + sum(apply(lambda[, -j], 2, sum)^2) + sum(theta))
+  omegahs <- sapply(1:k, function(l) {
+    d <- paste0("d", l)
+    i <- paste0("HFI", l * 2 + c(-1, 0))
+    sum(lambda[i, d])^2 /
+      (sum(lambda[i, j])^2 + sum(lambda[i, d])^2 + sum(theta[i]))
+  })
+  list(ecv = ecv, puc = puc, omegah = omegah, omegahs = omegahs)
+}
+
+# Tables of reliability measures
+tab_rm <- lapply(c(FALSE, TRUE), function(std) {
+  tbl <- do.call(rbind, lapply(1:2, function(k) {
+    index <- c("fi", "sfi")[k]
+    Index <- "Flourish Index" %>% {c(., paste("Secure", .))}
+    r <- bifactrel(index, std)
+    M <- matrix(NA, nrow = 4, ncol = 7)
+    rownames(M) <- c("PUC", "ECV", "OmegaH", "OmegaHS")
+    colnames(M) <- c("GF", paste0("D", 1:6))
+    M["PUC", 1] <- r$puc
+    M["ECV", 1] <- r$ecv
+    M["OmegaH", 1] <- r$omegah
+    M["OmegaHS", (1:length(r$omegahs)) + 1] <- r$omegahs
+    cbind(data.frame(Index = Index[k], Reliability_measure = rownames(M)), M)
+  }))
+  rownames(tbl) <- NULL
+  return(tbl)
+})
+names(tab_rm) <- c("unstandardized", "standardized")
+
+```
+
+**Reliability measures based on unstandardized loadings**
+
+```{r cfa_fi_bifactor_table_reliability_unstandardized}
+kable(tab_rm$unstandardized, digits = 3)
+```
+
+```{r cfa_fi_bifactor_export_table_reliability_unstandardized, echo=FALSE}
+f <- "/tmp/cfa_fi_bifactor_reliability_unstd.xls"
+write_xlsx(list(cfa_fi_reliability_unstd = tab_rm$unstandardized), f)
+embed_file(f, text = "Reliability measures of bi-factor models [unstd] (xlsx)")
+f <- file.remove(f)
+rm(f)
+```
+
+**Reliability measures based on standardized loadings**
+
+```{r cfa_fi_bifactor_table_reliability_standardized}
+kable(tab_rm$standardized, digits = 3)
+```
+
+```{r cfa_fi_bifactor_export_table_reliability_standardized, echo=FALSE}
+f <- "/tmp/cfa_fi_bifactor_reliability_std.xls"
+write_xlsx(list(cfa_fi_reliability_std = tab_rm$standardized), f)
+embed_file(f, text = "Reliability measures of bi-factor models [std] (xlsx)")
+f <- file.remove(f)
+rm(f)
+```
+
+```{r cfa_fi_bifactor_reliability_measures_tests, eval=FALSE, echo=FALSE}
+library(BifactorIndicesCalculator)
+bifactorIndices(fits[[3]], standardized = FALSE)
+bifactorIndices(fits[[3]], standardized = TRUE)
+```
+
+<!-- ============================ Reference(s) ============================ -->
+
+<!--
+
+Histogram breaks: https://stackoverflow.com/questions/25146544/
+
+Embed files: https://bookdown.org/yihui/rmarkdown-cookbook/embed-file.html
+
+-->
