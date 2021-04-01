@@ -1,0 +1,16 @@
+*.XLSX
+*.doc
+*.docx
+*.drawio
+*.jpg
+*.odt
+*.pdf
+*.rda
+*.rds
+*.txz
+*.xls
+*.xlsx
+*.zip
+*dev.R
+*sessionInfo*.txt
+courriel_longchamps_20190314.tex
