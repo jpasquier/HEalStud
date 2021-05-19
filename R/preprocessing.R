@@ -21,16 +21,22 @@ rm(.cb_path, .lg)
 
 # ---------------------------------- Data ----------------------------------- #
 
-hs <- lapply(list(T0 = 0, T05 = 0.5), function(Time) {
-  if (Time == 0) {
-    file_name <- "data-raw/Données questionnaires - ANONYME.XLSX"
-    row_list <- list(fr = 1:2377, en = 2378:2417, de = 2418:2537)
-  } else if (Time == 0.5) {
-    file_name <- "data-raw/EtudeHealstud_Healstud_2_Résultats.xlsx"
-    row_list <- list(fr = 1:418)
-  }
-  lapply(row_list, function(rows) {
-    tbl <- as.data.frame(read_xlsx(file_name, range = cell_rows(rows)))
+hs <- list()
+hs$T0 <- list(fr = 1:2377, en = 2378:2417, de = 2418:2537)
+hs$T0 <- lapply(hs$T0, function(rows) {
+  file_name <- "data-raw/Données questionnaires - ANONYME.XLSX"
+  as.data.frame(read_xlsx(file_name, range = cell_rows(rows)))
+})
+hs$T05 <- list(fr = as.data.frame(read_xlsx(
+  "data-raw/EtudeHealstud_Healstud_2_Résultats.xlsx"
+)))
+hs$T1 <- list(fr = "FR", en = "EN", de = "DE")
+hs$T1 <- lapply(hs$T1, function(lg) {
+  file_name = paste0("data-raw/T1-", lg, " - Résultats anonymisés.xlsx")
+  as.data.frame(read_xlsx(file_name))
+})
+hs <- lapply(setNames(names(hs), names(hs)), function(Time) {
+  lapply(hs[[Time]], function(tbl) {
     # removes empty columns
     for (v in grep("^\\.{3}[0-9]+$", names(tbl), value = TRUE)) {
       if (all(is.na(tbl[[v]]))) {
@@ -47,13 +53,21 @@ hs <- lapply(list(T0 = 0, T05 = 0.5), function(Time) {
       names(tbl) <- new_names
     }
     # Add time variable
-    tbl$Temps <- Time
+    tbl$Temps <- c(T0 = 0, T05 = 0.5, T1 = 1)[Time]
     return(tbl)
   })
 })
 
+# Number of observations
+nobs <- do.call(rbind, lapply(names(hs), function(Time) {
+  do.call(rbind, lapply(names(hs[[Time]]), function(lang) {
+    data.frame(Temps = Time, Langue = lang, Nobs = nrow(hs[[Time]][[lang]]),
+               stringsAsFactors = FALSE)
+  }))
+}))
+
 # Removes multiple "spaces" in GSES variables
-for (Time in c("T0", "T05")) {
+for (Time in c("T0", "T05", "T1")) {
   for (v in grep("^GSES", names(hs[[Time]]$fr), value = TRUE)) {
     hs[[Time]]$fr[[v]] <- gsub(" +", " ", hs[[Time]]$fr[[v]])
   }
@@ -66,6 +80,12 @@ hs$T0$en$Sexe <- NA
 # Rename the variable CLE in T05 database as UID
 names(hs$T05$fr)[names(hs$T05$fr) == "CLE"] <- "UID"
 
+# Rename the variable Identifiant in T1 database as UID
+hs$T1 <- lapply(hs$T1, function(tbl) {
+  names(tbl)[names(tbl) == "Identifiant"] <- "UID"
+  return(tbl)
+})
+
 # Participants to T05 are all of Dommaine Santé and Filière Soins infirmiers
 # Guzman Villegas-Frei Myriam <m.guzmanvillegas-frei@ecolelasource.ch>
 # 11.11.2020
@@ -73,13 +93,33 @@ hs$T05$fr$Domaine <- "Santé"
 hs$T05$fr$Filiere <- "Soins infirmiers"
 
 # We have a link for some students (but not for all) who participated to T0 and
-# T05
-# Arnould Yannick <yannick.arnould@heig-vd.ch> 05.11.2020
+# T05 (Arnould Yannick <yannick.arnould@heig-vd.ch> 05.11.2020)
 cle <- read_xlsx("data-raw/Correspondance clés T0.5-T0.xlsx")
 names(cle)[names(cle) == "CLE_enquête T0.5"] <- "UID"
 names(cle)[names(cle) == "CLE_correspondante enquête T0"] <- "UID_T0"
 hs$T05$fr <- merge(hs$T05$fr, cle, by = "UID", all.x = TRUE, sort = FALSE)
 rm(cle)
+
+# T1: Remove prefixes in PGI variables
+hs$T1 <- lapply(hs$T1, function(tbl) {
+  for (v in grep("^PGI", names(tbl), value = TRUE)) {
+    tbl[[v]] <- sub("[0-5]( )?= ", "", tbl[[v]])
+  }
+  return(tbl)
+})
+
+# T1: Correct LANG_SAISIE in english questionnaire (set to FR)
+hs$T1$en$LANG_SAISIE[hs$T1$en$LANG_SAISIE == "FR"] <- "ANG"
+
+# Harmonization of codes between T0, T05 and T1
+hs$T1$fr$Sexe[hs$T1$fr$Sexe == "je désire spécifier différemment"] <-
+  "Je désire spécifier différemment"
+for (v in paste0("WHOQOL_", 1:26)) {
+  hs$T1$de[[v]][hs$T1$de[[v]] == "Mittelmässig"] <- "Mittel-mäßig"
+  hs$T1$de[[v]][hs$T1$de[[v]] == "Äusserst"] <- "Äußerst"
+}
+hs$T0$de$WHOQOL_26[hs$T0$de$WHOQOL_26 == "Zeitweilig"] <- "Gelegentlich"
+rm(v)
 
 # -------------------------------- Recoding --------------------------------- #
 
@@ -137,32 +177,52 @@ hs <- lapply(setNames(names(hs), names(hs)), function(Time) {
 # Concatenantes dataframes
 hs <- do.call(rbind, lapply(hs, function(z) do.call(rbind, z)))
 
-# ---------------------------- Delete duplicates ---------------------------- #
+# -------------------------------- Deletions -------------------------------- #
 
 # Delete observations 4/6JDQ-PADT, 2297/QMCR-MYNS, 2322/XEFJ-B8Z7 and
 # 2326/QAAN-GMH8 of T0 as discussed in the email form Claudia Ortoleva dated 19
 # August 2020.
-message(paste("Number of rows before removing duplicates:", nrow(hs)))
 if (any(is.na(hs$Temps))) stop("missing Temps")
-if (any(is.na(hs$`N°Obs`))) stop("missing N°Obs")
+if (any(is.na(hs$`N°Obs`) & hs$Temps != 1)) stop("missing N°Obs")
 if (any(is.na(hs$UID))) stop("missing UID")
-hs <- hs[!(
+dups <-
   hs$Temps == 0 & hs$`N°Obs` == 4    & hs$UID == "6JDQ-PADT" |
   hs$Temps == 0 & hs$`N°Obs` == 2297 & hs$UID == "QMCR-MYNS" |
   hs$Temps == 0 & hs$`N°Obs` == 2322 & hs$UID == "XEFJ-B8Z7" |
-  hs$Temps == 0 & hs$`N°Obs` == 2326 & hs$UID == "QAAN-GMH8"), ]
-message(paste("Number of rows after removing duplicates:", nrow(hs)))
+  hs$Temps == 0 & hs$`N°Obs` == 2326 & hs$UID == "QAAN-GMH8"
+ndups <- aggregate(dups, list(hs$Temps, hs$LANG_SAISIE), sum)
+names(ndups) <- c("Temps", "Langue", "Doublons")
+ndups$Temps <- paste0("T", sub("\\.(0)?", "", ndups$Temps))
+ndups$Langue <- sub("ang", "en", tolower(ndups$Langue))
+nobs <- merge(nobs, ndups, by = c("Temps", "Langue"), all.x = TRUE)
+hs <- hs[!dups, ]
+if (any(duplicated(hs[c("UID", "Temps")]))) stop("Duplicated UID")
+rm(dups, ndups)
 
-# ----------------------------- Duplicated UID ------------------------------ #
-
-if (any(duplicated(hs$UID))) {
-  .v <- c("Temps", "N°Obs", "LANG_SAISIE", "UID")
-  .v <- c(.v, names(hs)[!(names(hs) %in% .v)])
-  dup_uid <- hs[hs$UID %in% hs$UID[duplicated(hs$UID)], .v]
-  dup_uid <- dup_uid[order(dup_uid$UID), ]
-} else {
-  message("No remaining duplicated UID")
+# Deletion of persons who have withdrawn their consent
+# yannick.arnould@heig-vd.ch, 11.03.2021
+nobs$ConsentementRetire <- 0
+for (uid in c("552Q-WQKT", "VWA3-66SR")) {
+  Time <- paste0("T", sub("\\.(0)?", "", hs[hs$UID == uid, "Temps"]))
+  lang <- sub("ang", "en", tolower(hs[hs$UID == uid, "LANG_SAISIE"]))
+  nobs[nobs$Temps == Time & nobs$Langue == lang, "ConsentementRetire"] <-
+    nobs[nobs$Temps == Time & nobs$Langue == lang, "ConsentementRetire"] + 1
+  hs <- hs[hs$UID != uid, ]
 }
+rm(uid, Time, lang)
+
+# Removal of persons of undetermined gender (according to discussion by Zoom
+# of May 18, 2021)
+nobs$GenreIndetermine <- 0
+R <- which(hs$Sexe %in% 2:3)
+for (r in R) {
+  Time <- paste0("T", sub("\\.(0)?", "", hs[r, "Temps"]))
+  lang <- sub("ang", "en", tolower(hs[r, "LANG_SAISIE"]))
+  nobs[nobs$Temps == Time & nobs$Langue == lang, "GenreIndetermine"] <-
+    nobs[nobs$Temps == Time & nobs$Langue == lang, "GenreIndetermine"] + 1
+}
+hs <- hs[!(hs$Sexe %in% 2:3), ]
+rm(R, r, Time, lang)
 
 # ----------- Remove empty columns and colums with a unique value ----------- #
 
@@ -196,7 +256,7 @@ hs$LANG_SAISIE <- factor(hs$LANG_SAISIE, c("FR", "DE", "ANG"))
 hs$APPAREIL_SAISIE <- factor(hs$APPAREIL_SAISIE)
 hs$PROGRESSION <- factor(hs$PROGRESSION,
                          c("Terminé", "abgeschlossen", "Completed"))
-hs$Temps <- factor(hs$Temps, c(0, 0.5))
+hs$Temps <- factor(hs$Temps, c(0, 0.5, 1))
 
 # Modifiy the codebook
 # Delete a line of the codebook dataframe (see comment in the xlsx file)
@@ -352,7 +412,7 @@ rm(.i)
 # ----------------------------------- PGI ----------------------------------- #
 
 # Checks if there is any missing values
-if (any(is.na(hs[hs$Temps == 0.5, grep("^PGI", names(hs))]))) {
+if (any(is.na(hs[hs$Temps %in% c(0.5, 1), grep("^PGI", names(hs))]))) {
   stop("PGI: missing values must be processed")
 }
 
@@ -372,9 +432,14 @@ rm(dim_list, v)
 
 # --------------------------- Save processed data --------------------------- #
 
-save(hs, file = "data/hs_20201119.rda", compress = "xz")
-write_xlsx(list(data = hs, recoded_variables = rec),
-           "data/hs_data_20201119.xlsx")
-sink("data-raw/preprocessing_sessionInfo_20201119.txt")
+save(hs, file = "data/hs_20210519.rda", compress = "xz")
+write_xlsx(list(data = hs, recoded_variables = rec, Nobs = nobs),
+           "data/healstud_data_20210519.xlsx")
+sink("data-raw/preprocessing_sessionInfo_20210519.txt")
 print(sessionInfo(), locale = FALSE)
 sink()
+
+# --------------------------------------------------------------------------- #
+
+nrow(hs) - sum(nobs$Nobs) + sum(nobs[c("Doublons", "ConsentementRetire",
+                                       "GenreIndetermine")])

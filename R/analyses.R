@@ -1,14 +1,27 @@
 wd <- "~/Projects/LaSource/Guzman - Healthy Students"
-date <- "2021-04-01"
-load(file.path(wd, "/data/hs_20201119.rda"))
-z <- 0
-dom_list <- c("Annee_1", "Annee_2", "Annee_Autre")
+date <- "2021-05-19"
+load(file.path(wd, "/data/hs_20210519.rda"))
 s0 <- paste0("analyses_", gsub("-", "", date))
 output_dir <- path.expand(file.path(wd, "results", s0))
 if (!dir.exists(output_dir)) dir.create(output_dir)
-s1 <- sub("0\\.5", "05", z)
-for (dom in dom_list) {
+L <- rbind(
+  data.frame(
+    z = 0,
+    dom = c(NA, names(attr(hs$Domaine, "labels")), "Soins infirmiers",
+            "Annee_1", "Annee_2", "Annee_Autre")
+  ),
+  data.frame(z = 0.5, dom = c(NA, "COVID19_4_Non", "COVID19_4_Oui")),
+  data.frame(
+    z = 1,
+    dom = c(NA, names(attr(hs$Domaine, "labels")), "Soins infirmiers",
+            "COVID19_4_Non", "COVID19_4_Oui", "Annee_2", "Annee_3")
+  )
+)
+for (k in 1:nrow(L)) {
+  z <- L[k, "z"]
+  dom <- L[k, "dom"]
   print(paste("Temps :", z, "/ Domaine :", dom))
+  s1 <- sub("0\\.5", "05", z)
   s2 <- gsub(" ", "_", iconv(dom, to="ASCII//TRANSLIT"))
   if (is.na(s2)) s2 <- "" else s2 <- paste0("_", s2)
   output_file <- file.path(output_dir, paste0(s0, "_T", s1, s2, ".html"))
