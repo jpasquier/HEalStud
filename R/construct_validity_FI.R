@@ -1,5 +1,16 @@
+#!/usr/bin/env Rscript
+
+argsList <- commandArgs(trailingOnly = TRUE)
+if (length(argsList) == 0) {
+  Temps <- 0
+} else {
+  Temps <- as.numeric(argsList[1])
+}
+
+# --------------------------------------------------------------------------- #
+
 library(labelled)
-library(xlsx)
+library(writexl)
 
 # ---------------------------- Working directory ---------------------------- #
 
@@ -7,9 +18,11 @@ setwd("~/Projects/LaSource/Guzman - Healthy Students")
 
 # -------------------------------- Load data -------------------------------- #
 
-load("data/hs_20201119.rda")
+dataFile <- "data/hs_20210519.rda"
+load(dataFile)
+message(paste("Data:", dataFile))
 
-hs <- hs[hs$Temps == 0, ]
+hs <- hs[hs$Temps == Temps, ]
 
 # --------------------------- Construct validity ---------------------------- #
 
@@ -66,11 +79,7 @@ names(R)[-1] <- X2
 
 # ----------------------------- Export results ------------------------------ #
 
-a <- FALSE
-for (r in names(R)) {
-  write.xlsx(R[[r]], "results/construct_validity_FI_20210105.xlsx",
-             sheetName = r, row.names = FALSE, append = a)
-  a <- TRUE
-}
-rm(a, r)
+outputFile <- paste0("results/construct_validity_FI_T", Temps, "_",
+                     format(Sys.time(), "%Y%m%d"), ".xlsx")
+write_xlsx(R, outputFile)
 
