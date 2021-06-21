@@ -1,6 +1,6 @@
 wd <- "~/Projects/LaSource/Guzman - Healthy Students"
-date <- "2021-05-19"
-load(file.path(wd, "/data/hs_20210519.rda"))
+date <- "2021-06-21"
+load(file.path(wd, "/data/hs_20210621.rda"))
 s0 <- paste0("analyses_", gsub("-", "", date))
 output_dir <- path.expand(file.path(wd, "results", s0))
 if (!dir.exists(output_dir)) dir.create(output_dir)

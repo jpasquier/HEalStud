@@ -69,7 +69,7 @@ options(knitr.kable.NA = "")
 # -------------------------------- Load data -------------------------------- #
 
 temps <- params$temps
-load("~/Projects/LaSource/Guzman - Healthy Students/data/hs_20210519.rda")
+load("~/Projects/LaSource/Guzman - Healthy Students/data/hs_20210621.rda")
 hs <- hs[hs$Temps == temps, ]
 if (!is.na(params$dom)) {
   if (params$dom == "Soins infirmiers") {
