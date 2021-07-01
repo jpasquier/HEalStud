@@ -86,6 +86,8 @@ if (!is.na(params$dom)) {
     hs <- hs[!is.na(hs$Annee_etude) & hs$Annee_etude == 4, ]
   } else if (params$dom == "Annee_Autre") {
     hs <- hs[!is.na(hs$Annee_etude) & hs$Annee_etude == 0, ]
+  } else if (params$dom == "Langue_FR") {
+    hs <- hs[!is.na(hs$LANG_SAISIE) & hs$LANG_SAISIE == "FR", ]
   } else {
     hs <- hs[to_factor(hs$Domaine) == params$dom, ]
   }

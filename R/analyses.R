@@ -1,5 +1,5 @@
 wd <- "~/Projects/LaSource/Guzman - Healthy Students"
-date <- "2021-06-21"
+date <- "2021-07-01"
 load(file.path(wd, "/data/hs_20210621.rda"))
 s0 <- paste0("analyses_", gsub("-", "", date))
 output_dir <- path.expand(file.path(wd, "results", s0))
@@ -17,6 +17,7 @@ L <- rbind(
             "COVID19_4_Non", "COVID19_4_Oui", "Annee_2", "Annee_3")
   )
 )
+L <- data.frame(z = 0, dom = "Langue_FR")
 for (k in 1:nrow(L)) {
   z <- L[k, "z"]
   dom <- L[k, "dom"]
