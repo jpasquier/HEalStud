@@ -214,76 +214,6 @@ for (uid in c("552Q-WQKT", "VWA3-66SR")) {
 }
 rm(uid, Time, lang)
 
-# Removal of persons of undetermined gender (according to discussion by Zoom
-# of May 18, 2021 and to the email of J. Jubin of June 18, 2021) 
-nobs$GenreIndetermine <- 0
-sexe <- merge(hs[hs$Temps == 0, c("UID", "Sexe")],
-              hs[hs$Temps == 1, c("UID", "Sexe")],
-              by = "UID", suffixes = c(".T0", ".T1"), all = TRUE)
-sexe <- cbind(sexe, t(apply(sexe[2:3], 1, function(z) {
-  z0 <- z[1]
-  z1 <- z[2]
-  if (is.na(z0)) {
-    if (is.na(z1)) {
-      sexe_rm <- FALSE
-      sexe_def <- NA
-    } else if (z1 %in% 2:3) {
-      sexe_rm <- TRUE
-      sexe_def <- NA
-    } else {
-      sexe_rm <- FALSE
-      sexe_def <- z1
-    }
-  } else if (is.na(z1)) {
-    if (z0 %in% 2:3) { 
-      sexe_rm <- TRUE
-      sexe_def <- NA
-    } else {
-      sexe_rm <- FALSE
-      sexe_def <- z0
-    }
-  } else {
-    if (z0 %in% 2:3) { 
-      if (z1 %in% 2:3) {
-        sexe_rm <- TRUE
-        sexe_def <- NA
-      } else {
-        sexe_rm <- FALSE
-        sexe_def <- z1
-      }
-    } else {
-      if (z1 %in% 2:3) {
-        sexe_rm <- FALSE
-        sexe_def <- z0
-      } else if (z0 == z1) {
-        sexe_rm <- FALSE
-        sexe_def <- z0
-      } else {
-        sexe_rm <- TRUE
-        sexe_def <- NA
-      }
-    }
-  }
-  c(sexe_rm, sexe_def)
-})))
-names(sexe)[4:5] <- c("sexe_rm", "sexe_def")
-#sexe[sexe$sexe_rm == 1, ]
-hs <- merge(hs, sexe[c("UID", "sexe_rm", "sexe_def")],
-            by = "UID", all.x = TRUE)
-hs[hs$Temps == 0.5 & hs$Sexe %in% 2:3, "sexe_rm"] <- 1
-#table(hs$Temps, hs$sexe_rm, useNA = "ifany")
-for (r in which(!is.na(hs$sexe_rm) & hs$sexe_rm == 1)) {
-  Time <- paste0("T", sub("\\.(0)?", "", hs[r, "Temps"]))
-  lang <- sub("ang", "en", tolower(hs[r, "LANG_SAISIE"]))
-  nobs[nobs$Temps == Time & nobs$Langue == lang, "GenreIndetermine"] <-
-    nobs[nobs$Temps == Time & nobs$Langue == lang, "GenreIndetermine"] + 1
-}
-hs <- hs[is.na(hs$sexe_rm) | hs$sexe_rm == 0, ]
-b <- !is.na(hs$sexe_def) & (is.na(hs$Sexe) | hs$Sexe != hs$sexe_def)
-hs[b, "Sexe"] <- hs[b, "sexe_def"]
-hs <- hs[!(names(hs) %in% c("sexe_rm", "sexe_def"))]
-rm(sexe, r, Time, lang, b)
-
 # ----------- Remove empty columns and colums with a unique value ----------- #
 
 # Empty columns
@@ -490,9 +420,84 @@ for (v in names(dim_list)) {
 }
 rm(dim_list, v)
 
+# ------------------------------ Deletions (2) ------------------------------ #
+
+# Removal of persons of undetermined gender (according to discussion by Zoom
+# of May 18, 2021 and to the email of J. Jubin of June 18, 2021) 
+nobs$GenreIndetermine <- 0
+sexe <- merge(hs[hs$Temps == 0, c("UID", "Sexe")],
+              hs[hs$Temps == 1, c("UID", "Sexe")],
+              by = "UID", suffixes = c(".T0", ".T1"), all = TRUE)
+sexe <- cbind(sexe, t(apply(sexe[2:3], 1, function(z) {
+  z0 <- z[1]
+  z1 <- z[2]
+  if (is.na(z0)) {
+    if (is.na(z1)) {
+      sexe_rm <- FALSE
+      sexe_def <- NA
+    } else if (z1 %in% 2:3) {
+      sexe_rm <- TRUE
+      sexe_def <- NA
+    } else {
+      sexe_rm <- FALSE
+      sexe_def <- z1
+    }
+  } else if (is.na(z1)) {
+    if (z0 %in% 2:3) { 
+      sexe_rm <- TRUE
+      sexe_def <- NA
+    } else {
+      sexe_rm <- FALSE
+      sexe_def <- z0
+    }
+  } else {
+    if (z0 %in% 2:3) { 
+      if (z1 %in% 2:3) {
+        sexe_rm <- TRUE
+        sexe_def <- NA
+      } else {
+        sexe_rm <- FALSE
+        sexe_def <- z1
+      }
+    } else {
+      if (z1 %in% 2:3) {
+        sexe_rm <- FALSE
+        sexe_def <- z0
+      } else if (z0 == z1) {
+        sexe_rm <- FALSE
+        sexe_def <- z0
+      } else {
+        sexe_rm <- TRUE
+        sexe_def <- NA
+      }
+    }
+  }
+  c(sexe_rm, sexe_def)
+})))
+names(sexe)[4:5] <- c("sexe_rm", "sexe_def")
+#sexe[sexe$sexe_rm == 1, ]
+hs_original_gender <- hs
+hs <- merge(hs, sexe[c("UID", "sexe_rm", "sexe_def")],
+            by = "UID", all.x = TRUE)
+hs[hs$Temps == 0.5 & hs$Sexe %in% 2:3, "sexe_rm"] <- 1
+#table(hs$Temps, hs$sexe_rm, useNA = "ifany")
+for (r in which(!is.na(hs$sexe_rm) & hs$sexe_rm == 1)) {
+  Time <- paste0("T", sub("\\.(0)?", "", hs[r, "Temps"]))
+  lang <- sub("ang", "en", tolower(hs[r, "LANG_SAISIE"]))
+  nobs[nobs$Temps == Time & nobs$Langue == lang, "GenreIndetermine"] <-
+    nobs[nobs$Temps == Time & nobs$Langue == lang, "GenreIndetermine"] + 1
+}
+hs <- hs[is.na(hs$sexe_rm) | hs$sexe_rm == 0, ]
+b <- !is.na(hs$sexe_def) & (is.na(hs$Sexe) | hs$Sexe != hs$sexe_def)
+hs[b, "Sexe"] <- hs[b, "sexe_def"]
+hs <- hs[!(names(hs) %in% c("sexe_rm", "sexe_def"))]
+rm(sexe, r, Time, lang, b)
+
 # --------------------------- Save processed data --------------------------- #
 
 save(hs, file = "data/hs_20210621.rda", compress = "xz")
+save(hs_original_gender, file = "data/hs_original_gender_20220628.rda",
+     compress = "xz")
 write_xlsx(list(data = hs, recoded_variables = rec, Nobs = nobs),
            "data/healstud_data_20210621.xlsx")
 sink("data-raw/preprocessing_sessionInfo_20210621.txt")

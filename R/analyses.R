@@ -1,6 +1,7 @@
 wd <- "~/Projects/LaSource/Guzman - Healthy Students"
-date <- "2021-07-01"
-load(file.path(wd, "/data/hs_20210621.rda"))
+date <- "2022-06-28"
+load(file.path(wd, "/data/hs_original_gender_20220628.rda"))
+hs <- hs_original_gender
 s0 <- paste0("analyses_", gsub("-", "", date))
 output_dir <- path.expand(file.path(wd, "results", s0))
 if (!dir.exists(output_dir)) dir.create(output_dir)
@@ -42,7 +43,9 @@ for (k in 1:nrow(L)) {
     system(paste("cp", tmp_file_1, tmp_file_2))
   }
   rmarkdown::render(tmp_file_2,
-                    params = list(temps = z, date = date, dom = dom),
+                    params = list(data = hs, temps = z, date = date, dom = dom,
+                                  sttl = paste('Domaine :', dom,
+                                               '- Variable Sexe inchangée')),
                     output_file = output_file)
   file.remove(tmp_file_1, tmp_file_2)
 }

@@ -1,6 +1,6 @@
 ---
 title: "Etude HealStud - Analyse des données à T`r params$temps`"
-subtitle: "`r if (!is.null(params$dom)) paste('Domaine :', params$dom)`"
+subtitle: "`r if (!is.na(params$sttl)) params$sttl`"
 author: "Jérôme Pasquier"
 date: "`r params$date`"
 output:
@@ -10,9 +10,11 @@ output:
     toc_float: false
     code_folding: hide
 params:
+    data: NA
     temps: NA
     dom: NA
     date: ""
+    sttl: NA
 ---
 
 <!--
@@ -69,8 +71,7 @@ options(knitr.kable.NA = "")
 # -------------------------------- Load data -------------------------------- #
 
 temps <- params$temps
-load("~/Projects/LaSource/Guzman - Healthy Students/data/hs_20210621.rda")
-hs <- hs[hs$Temps == temps, ]
+hs <- params$data[params$data$Temps == temps, ]
 if (!is.na(params$dom)) {
   if (params$dom == "Soins infirmiers") {
     hs <- hs[to_factor(hs$Filiere) == params$dom, ]
@@ -576,7 +577,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   GSES_tot = seq(10, 40, 5),
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(GSES_tot = factor(GSES_tot)) %>%
@@ -711,7 +712,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   CD_RISC_tot = seq(0, 40, 5),
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(CD_RISC_tot = factor(CD_RISC_tot)) %>%
@@ -848,7 +849,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   MAAS_tot = seq(20, 90, 10),
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(MAAS_tot = factor(MAAS_tot)) %>%
@@ -983,7 +984,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   MSPSS_tot = 1:7,
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(MSPSS_tot = factor(MSPSS_tot)) %>%
@@ -1070,7 +1071,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   MSPSS_signif_other = 1:7,
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(MSPSS_signif_other = factor(MSPSS_signif_other)) %>%
@@ -1151,7 +1152,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   MSPSS_family = 1:7,
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(MSPSS_family = factor(MSPSS_family)) %>%
@@ -1232,7 +1233,7 @@ expand.grid(
   PSS14_tot = m$model$PSS14_tot %>% {seq(min(.), max(.), length.out = 10^3)},
   MSPSS_friends = 1:7,
   Age = median(m$model$Age),
-  Sexe = c("une femme", "un homme")
+  Sexe = names(attr(hs$Sexe, 'labels')[attr(hs$Sexe, 'labels') %in% hs$Sexe])
 ) %>%
   cbind(., pred_WHOQOL_d2_raw_score = predict(m, .)) %>%
   mutate(MSPSS_friends = factor(MSPSS_friends)) %>%
